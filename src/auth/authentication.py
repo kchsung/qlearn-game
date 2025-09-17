@@ -5,16 +5,13 @@
 
 import streamlit as st
 from typing import Optional, Dict, Any
-from src.core.config import DATABASE_PATH
 from .supabase_auth import SupabaseAuth
-import sqlite3
 
 
 class AuthenticationManager:
     """사용자 인증 관리자 (Supabase Google OAuth)"""
     
-    def __init__(self, db_path: str = DATABASE_PATH):
-        self.db_path = db_path
+    def __init__(self):
         self.supabase_auth = SupabaseAuth()
     
     def handle_google_login(self):
@@ -28,8 +25,8 @@ class AuthenticationManager:
                 
                 if user_data:
                     st.info("Google 인증 성공! 사용자 정보를 동기화하는 중...")
-                    # 로컬 데이터베이스에 사용자 정보 저장/업데이트
-                    user_id = self._sync_user_to_local_db(user_data)
+                    # Supabase 데이터베이스에 사용자 정보 저장/업데이트
+                    user_id = self._sync_user_to_supabase_db(user_data)
                     
                     if user_id:
                         # 세션 설정 (순서 중요!)
@@ -101,38 +98,39 @@ class AuthenticationManager:
             st.error(f"❌ Google 로그인 중 오류 발생: {str(e)}")
             st.error("디버깅 정보: Supabase 설정을 확인해주세요.")
     
-    def _sync_user_to_local_db(self, user_data: Dict[str, Any]) -> Optional[str]:
-        """Supabase 사용자 정보를 로컬 DB에 동기화"""
+    def _sync_user_to_supabase_db(self, user_data: Dict[str, Any]) -> Optional[str]:
+        """Supabase 사용자 정보를 Supabase DB에 동기화"""
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            from src.core.database import GameDatabase
             
-            # 사용자 ID 생성 (이메일 기반)
             user_id = user_data['user_id']
             email = user_data['email']
             name = user_data.get('name', '')
             avatar_url = user_data.get('avatar_url', '')
             
-            # 사용자 정보 확인/삽입
-            cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
-            existing_user = cursor.fetchone()
+            # Supabase DB 클라이언트 생성
+            db = GameDatabase()
             
-            if not existing_user:
+            # 사용자 프로필 확인
+            existing_profile = db.get_user_profile(user_id)
+            
+            if not existing_profile:
                 # 새 사용자 생성
-                cursor.execute('''
-                    INSERT INTO users (user_id, username, email, profile_image, created_at, last_active)
-                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                ''', (user_id, name, email, avatar_url))
+                success = db.create_user_profile(user_id, name, email, avatar_url)
+                if not success:
+                    st.error("사용자 프로필 생성 실패")
+                    return None
             else:
                 # 기존 사용자 정보 업데이트
-                cursor.execute('''
-                    UPDATE users 
-                    SET username = ?, email = ?, profile_image = ?, last_active = CURRENT_TIMESTAMP
-                    WHERE user_id = ?
-                ''', (name, email, avatar_url, user_id))
-            
-            conn.commit()
-            conn.close()
+                updates = {
+                    'username': name,
+                    'email': email,
+                    'profile_image': avatar_url
+                }
+                success = db.update_user_profile(user_id, updates)
+                if not success:
+                    st.error("사용자 프로필 업데이트 실패")
+                    return None
             
             return user_id
             

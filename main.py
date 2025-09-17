@@ -10,6 +10,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import streamlit as st
 from src.app import AIAssessmentGame
+from src.core.config import validate_environment
 
 # 페이지 설정
 st.set_page_config(
@@ -42,6 +43,11 @@ st.markdown("""
 
 def main():
     """메인 함수"""
+    # 환경변수 검증
+    if not validate_environment():
+        st.error("❌ 환경변수가 설정되지 않았습니다. 위의 안내를 따라 .env 파일을 생성하세요.")
+        st.stop()
+    
     # 애플리케이션 실행
     app = AIAssessmentGame()
     app.run()

@@ -120,24 +120,34 @@ def render_user_sidebar(profile: dict, on_logout: Callable[[], None]):
             st.markdown(f'<img src="{profile["profile_image"]}" width="150">', unsafe_allow_html=True)
         
         # 사용자 정보
-        st.markdown(f"### {profile['username']}")
-        st.markdown(f"**레벨 {profile['level']}** {profile['level_icon']} {profile['level_name']}")
+        st.markdown(f"### {profile.get('username', 'Unknown')}")
         
-        # 경험치 바
-        xp_progress = (profile['xp'] / profile['next_level_xp']) * 100
-        st.progress(xp_progress / 100)
-        st.caption(f"XP: {profile['xp']} / {profile['next_level_xp']}")
+        # 레벨 정보 (기본값 처리)
+        level = profile.get('level', 1)
+        level_icon = profile.get('level_icon', '⭐')
+        level_name = profile.get('level_name', '초보자')
+        st.markdown(f"**레벨 {level}** {level_icon} {level_name}")
+        
+        # 경험치 바 (기본값 처리)
+        current_xp = profile.get('experience_points', 0)
+        next_level_xp = profile.get('next_level_xp', 100)
+        if next_level_xp > 0:
+            xp_progress = (current_xp / next_level_xp) * 100
+            st.progress(xp_progress / 100)
+            st.caption(f"XP: {current_xp} / {next_level_xp}")
+        else:
+            st.caption(f"XP: {current_xp}")
         
         # 통계
         col1, col2 = st.columns(2)
         with col1:
-            accuracy = profile['accuracy'] if profile['accuracy'] is not None else 0.0
+            accuracy = profile.get('accuracy', 0.0)
             st.metric("정답률", f"{accuracy:.1f}%")
-            st.metric("현재 연속", profile['current_streak'])
+            st.metric("현재 연속", profile.get('current_streak', 0))
         
         with col2:
-            st.metric("총 문제", profile['total_questions'])
-            st.metric("최고 연속", profile['best_streak'])
+            st.metric("총 문제", profile.get('total_questions_solved', 0))
+            st.metric("최고 연속", profile.get('best_streak', 0))
         
         # 업적
         if profile.get('achievements'):

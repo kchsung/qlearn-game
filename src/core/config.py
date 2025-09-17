@@ -9,8 +9,7 @@ from dotenv import load_dotenv
 # 환경 변수 로드
 load_dotenv()
 
-# 데이터베이스 설정
-DATABASE_PATH = "ai_master_quest.db"
+# Supabase 설정 (데이터베이스는 Supabase 사용)
 
 # OpenAI 설정
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
@@ -21,6 +20,34 @@ OPENAI_TEMPERATURE = 0.3
 # Supabase 설정
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')
+
+# 환경변수 검증
+def validate_environment():
+    """환경변수 검증"""
+    missing_vars = []
+    
+    if not SUPABASE_URL or SUPABASE_URL == 'your_supabase_url_here':
+        missing_vars.append('SUPABASE_URL')
+    if not SUPABASE_ANON_KEY or SUPABASE_ANON_KEY == 'your_supabase_anon_key_here':
+        missing_vars.append('SUPABASE_ANON_KEY')
+    if not OPENAI_API_KEY or OPENAI_API_KEY == 'your_openai_api_key_here':
+        missing_vars.append('OPENAI_API_KEY')
+    
+    if missing_vars:
+        print("❌ 다음 환경변수가 설정되지 않았습니다:")
+        for var in missing_vars:
+            print(f"   - {var}")
+        print("\n📝 .env 파일을 생성하고 다음 내용을 추가하세요:")
+        print("SUPABASE_URL=your_supabase_url_here")
+        print("SUPABASE_ANON_KEY=your_supabase_anon_key_here")
+        print("OPENAI_API_KEY=your_openai_api_key_here")
+        print("\n🔗 Supabase 설정 방법:")
+        print("1. https://supabase.com 에서 프로젝트 생성")
+        print("2. Settings → API에서 URL과 anon key 복사")
+        print("3. .env 파일에 추가")
+        return False
+    
+    return True
 
 # 게임 설정
 XP_REWARDS = {

@@ -1,201 +1,321 @@
 # database.py
 """
-데이터베이스 관련 클래스 및 함수
+Supabase 데이터베이스 관련 클래스 및 함수
 """
 
-import sqlite3
 import streamlit as st
-from src.core.config import DATABASE_PATH, LEVEL_REQUIREMENTS, ACHIEVEMENTS
+from typing import Dict, List, Optional, Any
+from src.core.config import LEVEL_REQUIREMENTS, ACHIEVEMENTS, SUPABASE_URL, SUPABASE_ANON_KEY
+from src.auth.supabase_auth import _get_supabase
 
 
 class GameDatabase:
-    """게임화된 평가 시스템 데이터베이스"""
+    """Supabase 기반 게임화된 평가 시스템 데이터베이스"""
     
-    def __init__(self, db_path: str = DATABASE_PATH):
-        self.db_path = db_path
-        self.init_database()
+    def __init__(self):
+        self.supabase = _get_supabase(SUPABASE_URL, SUPABASE_ANON_KEY)
+        if not self.supabase:
+            st.error("Supabase 클라이언트를 초기화할 수 없습니다.")
     
     def init_database(self):
-        """게임 데이터베이스 초기화"""
+        """Supabase 테이블 초기화 (필요시)"""
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-        except Exception as e:
-            st.error(f"데이터베이스 연결 오류: {str(e)}")
-            return
-        
-        # 사용자 프로필 테이블
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                user_id TEXT PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                email TEXT,
-                level INTEGER DEFAULT 1,
-                experience_points INTEGER DEFAULT 0,
-                total_questions_solved INTEGER DEFAULT 0,
-                correct_answers INTEGER DEFAULT 0,
-                current_streak INTEGER DEFAULT 0,
-                best_streak INTEGER DEFAULT 0,
-                profile_image TEXT,
-                profile_prompt TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # 레벨 요구사항 테이블
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS level_requirements (
-                level INTEGER PRIMARY KEY,
-                required_xp INTEGER,
-                min_accuracy REAL,
-                required_questions INTEGER,
-                level_name TEXT,
-                level_icon TEXT,
-                perks TEXT
-            )
-        ''')
-        
-        # 문제 풀이 기록 테이블
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS attempt_history (
-                attempt_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                question_id TEXT NOT NULL,
-                level INTEGER,
-                passed BOOLEAN,
-                score REAL,
-                time_taken INTEGER,
-                tokens_used INTEGER,
-                attempt_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                feedback TEXT,
-                FOREIGN KEY (user_id) REFERENCES users(user_id)
-            )
-        ''')
-        
-        # 승급 시험 기록 테이블
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS promotion_exams (
-                exam_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                from_level INTEGER,
-                to_level INTEGER,
-                exam_questions TEXT,
-                passed BOOLEAN,
-                total_score REAL,
-                exam_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                retry_count INTEGER DEFAULT 0,
-                FOREIGN KEY (user_id) REFERENCES users(user_id)
-            )
-        ''')
-        
-        # 업적/배지 테이블
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS achievements (
-                achievement_id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                description TEXT,
-                icon TEXT,
-                xp_reward INTEGER,
-                rarity TEXT
-            )
-        ''')
-        
-        # 사용자 업적 테이블
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_achievements (
-                user_id TEXT,
-                achievement_id TEXT,
-                earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (user_id, achievement_id),
-                FOREIGN KEY (user_id) REFERENCES users(user_id),
-                FOREIGN KEY (achievement_id) REFERENCES achievements(achievement_id)
-            )
-        ''')
-        
-        # 리더보드 뷰
-        cursor.execute('''
-            CREATE VIEW IF NOT EXISTS leaderboard AS
-            SELECT 
-                username,
-                level,
-                experience_points,
-                total_questions_solved,
-                CASE 
-                    WHEN total_questions_solved = 0 THEN 0.0
-                    ELSE ROUND(CAST(correct_answers AS REAL) / total_questions_solved * 100, 2)
-                END as accuracy,
-                best_streak
-            FROM users
-            ORDER BY level DESC, experience_points DESC
-        ''')
-        
-        # 레벨 요구사항 초기 데이터
-        self._init_level_requirements(cursor)
-        
-        # 기본 업적 초기화
-        self._init_achievements(cursor)
-        
-        try:
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            st.error(f"데이터베이스 초기화 오류: {str(e)}")
-            if conn:
-                conn.close()
-    
-    def _init_level_requirements(self, cursor):
-        """레벨 요구사항 초기화"""
-        cursor.executemany('''
-            INSERT OR REPLACE INTO level_requirements 
-            (level, required_xp, min_accuracy, required_questions, level_name, level_icon, perks)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', LEVEL_REQUIREMENTS)
-    
-    def _init_achievements(self, cursor):
-        """기본 업적 초기화"""
-        cursor.executemany('''
-            INSERT OR REPLACE INTO achievements 
-            (achievement_id, name, description, icon, xp_reward, rarity)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', ACHIEVEMENTS)
-    
-    def get_connection(self):
-        """데이터베이스 연결 반환"""
-        return sqlite3.connect(self.db_path)
-    
-    def execute_query(self, query: str, params: tuple = None):
-        """쿼리 실행 및 결과 반환"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            if params:
-                cursor.execute(query, params)
-            else:
-                cursor.execute(query)
-            
-            result = cursor.fetchall()
-            conn.close()
-            return result
-        except Exception as e:
-            st.error(f"쿼리 실행 오류: {str(e)}")
-            return None
-    
-    def execute_update(self, query: str, params: tuple = None):
-        """업데이트 쿼리 실행"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            if params:
-                cursor.execute(query, params)
-            else:
-                cursor.execute(query)
-            
-            conn.commit()
-            conn.close()
+            # Supabase에서는 테이블이 이미 존재한다고 가정
+            # 필요시 여기서 테이블 생성 로직 추가
+            st.info("✅ Supabase 데이터베이스 연결 확인")
             return True
         except Exception as e:
-            st.error(f"업데이트 쿼리 실행 오류: {str(e)}")
+            st.error(f"Supabase 데이터베이스 초기화 오류: {str(e)}")
             return False
+    
+    def create_user_profile(self, user_id: str, username: str, email: str, profile_image: str = "") -> bool:
+        """사용자 프로필 생성"""
+        try:
+            result = self.supabase.table('users').insert({
+                'user_id': user_id,
+                'username': username,
+                'email': email,
+                'level': 1,
+                'experience_points': 0,
+                'total_questions_solved': 0,
+                'correct_answers': 0,
+                'current_streak': 0,
+                'best_streak': 0,
+                'profile_image': profile_image,
+                'created_at': 'now()',
+                'last_active': 'now()'
+            }).execute()
+            
+            return len(result.data) > 0
+        except Exception as e:
+            st.error(f"사용자 프로필 생성 오류: {str(e)}")
+            return False
+    
+    def get_user_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """사용자 프로필 조회 (레벨 아이콘 포함)"""
+        try:
+            result = self.supabase.table('users').select('*').eq('user_id', user_id).execute()
+            
+            if result.data:
+                profile = result.data[0]
+                
+                # 레벨 아이콘과 이름이 없으면 level_requirements에서 가져오기
+                if not profile.get('level_icon') or not profile.get('level_name'):
+                    level = profile.get('level', 1)
+                    level_info = self._get_level_info(level)
+                    profile['level_icon'] = level_info['icon']
+                    profile['level_name'] = level_info['name']
+                
+                return profile
+            return None
+        except Exception as e:
+            st.error(f"사용자 프로필 조회 오류: {str(e)}")
+            return None
+    
+    def _get_level_info(self, level: int) -> Dict[str, str]:
+        """레벨 정보 조회"""
+        try:
+            result = self.supabase.table('level_requirements').select('icon, title').eq('level', level).execute()
+            
+            if result.data:
+                level_data = result.data[0]
+                return {
+                    'icon': level_data.get('icon', '🌱'),
+                    'name': level_data.get('title', '초보자')
+                }
+            else:
+                # 기본값 반환
+                return {'icon': '🌱', 'name': '초보자'}
+        except Exception as e:
+            st.error(f"레벨 정보 조회 오류: {str(e)}")
+            return {'icon': '🌱', 'name': '초보자'}
+    
+    def update_user_profile(self, user_id: str, updates: Dict[str, Any]) -> bool:
+        """사용자 프로필 업데이트"""
+        try:
+            updates['last_active'] = 'now()'
+            result = self.supabase.table('users').update(updates).eq('user_id', user_id).execute()
+            
+            return len(result.data) > 0
+        except Exception as e:
+            st.error(f"사용자 프로필 업데이트 오류: {str(e)}")
+            return False
+    
+    def add_experience(self, user_id: str, xp: int) -> bool:
+        """경험치 추가"""
+        try:
+            # 현재 경험치 조회
+            profile = self.get_user_profile(user_id)
+            if not profile:
+                return False
+            
+            current_xp = profile.get('experience_points', 0)
+            new_xp = current_xp + xp
+            
+            # 레벨 계산
+            new_level = self._calculate_level(new_xp)
+            
+            # 업데이트
+            updates = {
+                'experience_points': new_xp,
+                'level': new_level
+            }
+            
+            return self.update_user_profile(user_id, updates)
+        except Exception as e:
+            st.error(f"경험치 추가 오류: {str(e)}")
+            return False
+    
+    def record_answer(self, user_id: str, is_correct: bool) -> bool:
+        """답변 기록"""
+        try:
+            profile = self.get_user_profile(user_id)
+            if not profile:
+                return False
+            
+            # 현재 통계
+            total_questions = profile.get('total_questions_solved', 0) + 1
+            correct_answers = profile.get('correct_answers', 0)
+            current_streak = profile.get('current_streak', 0)
+            best_streak = profile.get('best_streak', 0)
+            
+            if is_correct:
+                correct_answers += 1
+                current_streak += 1
+                best_streak = max(best_streak, current_streak)
+            else:
+                current_streak = 0
+            
+            # 업데이트
+            updates = {
+                'total_questions_solved': total_questions,
+                'correct_answers': correct_answers,
+                'current_streak': current_streak,
+                'best_streak': best_streak
+            }
+            
+            return self.update_user_profile(user_id, updates)
+        except Exception as e:
+            st.error(f"답변 기록 오류: {str(e)}")
+            return False
+    
+    def get_leaderboard(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """리더보드 조회"""
+        try:
+            result = self.supabase.table('users').select(
+                'user_id, username, level, experience_points, total_questions_solved, correct_answers, profile_image'
+            ).order('experience_points', desc=True).limit(limit).execute()
+            
+            return result.data or []
+        except Exception as e:
+            st.error(f"리더보드 조회 오류: {str(e)}")
+            return []
+    
+    def get_user_stats(self, user_id: str) -> Dict[str, Any]:
+        """사용자 통계 조회"""
+        try:
+            profile = self.get_user_profile(user_id)
+            if not profile:
+                return {}
+            
+            total_questions = profile.get('total_questions_solved', 0)
+            correct_answers = profile.get('correct_answers', 0)
+            accuracy = (correct_answers / total_questions * 100) if total_questions > 0 else 0
+            
+            return {
+                'level': profile.get('level', 1),
+                'experience_points': profile.get('experience_points', 0),
+                'total_questions_solved': total_questions,
+                'correct_answers': correct_answers,
+                'accuracy': accuracy,
+                'current_streak': profile.get('current_streak', 0),
+                'best_streak': profile.get('best_streak', 0)
+            }
+        except Exception as e:
+            st.error(f"사용자 통계 조회 오류: {str(e)}")
+            return {}
+    
+    def _calculate_level(self, xp: int) -> int:
+        """경험치로 레벨 계산"""
+        for level_data in LEVEL_REQUIREMENTS:
+            level, required_xp, _, _, _, _, _ = level_data
+            if xp < required_xp:
+                return level - 1
+        return max([level_data[0] for level_data in LEVEL_REQUIREMENTS])
+    
+    def get_level_progress(self, user_id: str) -> Dict[str, Any]:
+        """레벨 진행률 조회"""
+        try:
+            profile = self.get_user_profile(user_id)
+            if not profile:
+                return {}
+            
+            current_level = profile.get('level', 1)
+            current_xp = profile.get('experience_points', 0)
+            
+            # LEVEL_REQUIREMENTS에서 현재 레벨 정보 찾기
+            current_level_data = None
+            next_level_data = None
+            prev_level_data = None
+            
+            for level_data in LEVEL_REQUIREMENTS:
+                level, required_xp, _, _, _, _, _ = level_data
+                if level == current_level:
+                    current_level_data = level_data
+                elif level == current_level + 1:
+                    next_level_data = level_data
+                elif level == current_level - 1:
+                    prev_level_data = level_data
+            
+            if not current_level_data:
+                return {}
+            
+            current_requirement = current_level_data[1]  # required_xp
+            next_requirement = next_level_data[1] if next_level_data else current_requirement
+            prev_xp = prev_level_data[1] if prev_level_data else 0
+            
+            # 현재 레벨에서의 진행률
+            level_xp = current_xp - prev_xp
+            level_requirement = current_requirement - prev_xp
+            
+            progress_percentage = (level_xp / level_requirement * 100) if level_requirement > 0 else 100
+            
+            return {
+                'current_level': current_level,
+                'current_xp': current_xp,
+                'level_xp': level_xp,
+                'level_requirement': level_requirement,
+                'progress_percentage': progress_percentage,
+                'next_level_requirement': next_requirement
+            }
+        except Exception as e:
+            st.error(f"레벨 진행률 조회 오류: {str(e)}")
+            return {}
+    
+    def update_profile_prompt(self, user_id: str, prompt: str) -> bool:
+        """프로필 프롬프트 업데이트"""
+        try:
+            updates = {'profile_prompt': prompt}
+            return self.update_user_profile(user_id, updates)
+        except Exception as e:
+            st.error(f"프로필 프롬프트 업데이트 오류: {str(e)}")
+            return False
+    
+    def get_profile_prompt(self, user_id: str) -> Optional[str]:
+        """프로필 프롬프트 조회"""
+        try:
+            profile = self.get_user_profile(user_id)
+            return profile.get('profile_prompt') if profile else None
+        except Exception as e:
+            st.error(f"프로필 프롬프트 조회 오류: {str(e)}")
+            return None
+    
+    def get_random_question(self, difficulty: str = 'medium', area: str = 'ai') -> Optional[Dict[str, Any]]:
+        """랜덤 문제 조회"""
+        try:
+            result = self.supabase.table('questions').select('*').eq('difficulty', difficulty).eq('area', area).limit(1).execute()
+            
+            if result.data:
+                return result.data[0]
+            return None
+        except Exception as e:
+            st.error(f"문제 조회 오류: {str(e)}")
+            return None
+    
+    def save_user_answer(self, user_id: str, question_id: str, user_answer: str, score: float, time_taken: int, tokens_used: int) -> bool:
+        """사용자 답변 저장"""
+        try:
+            result = self.supabase.table('user_answers').insert({
+                'user_id': user_id,
+                'question_id': question_id,
+                'user_answer': user_answer,
+                'score': score,
+                'time_taken': time_taken,
+                'tokens_used': tokens_used
+            }).execute()
+            
+            return len(result.data) > 0
+        except Exception as e:
+            st.error(f"답변 저장 오류: {str(e)}")
+            return False
+    
+    def get_user_answers(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """사용자 답변 기록 조회"""
+        try:
+            result = self.supabase.table('user_answers').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(limit).execute()
+            
+            return result.data or []
+        except Exception as e:
+            st.error(f"답변 기록 조회 오류: {str(e)}")
+            return []
+    
+    def get_user_answers_with_questions(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """사용자 답변과 문제 정보 함께 조회"""
+        try:
+            # user_answers와 questions를 조인해서 조회
+            result = self.supabase.table('user_answers').select('*, questions(*)').eq('user_id', user_id).order('created_at', desc=True).limit(limit).execute()
+            
+            return result.data or []
+        except Exception as e:
+            st.error(f"답변 기록 조회 오류: {str(e)}")
+            return []

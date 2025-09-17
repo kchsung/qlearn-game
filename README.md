@@ -33,10 +33,75 @@ SUPABASE_ANON_KEY=your_supabase_anon_key
 
 #### Supabase 설정 방법:
 1. [Supabase](https://supabase.com)에서 새 프로젝트 생성
-2. Authentication > Providers에서 Google OAuth 활성화
-3. Google Cloud Console에서 OAuth 2.0 클라이언트 ID 생성
-4. Supabase에 Google OAuth 설정 추가
-5. 환경 변수에 Supabase URL과 Anon Key 설정
+2. **데이터베이스 테이블 생성**: SQL Editor에서 다음 SQL 실행
+   ```sql
+   -- users 테이블 생성
+   CREATE TABLE IF NOT EXISTS users (
+       user_id TEXT PRIMARY KEY,
+       username TEXT UNIQUE NOT NULL,
+       email TEXT,
+       level INTEGER DEFAULT 1,
+       experience_points INTEGER DEFAULT 0,
+       total_questions_solved INTEGER DEFAULT 0,
+       correct_answers INTEGER DEFAULT 0,
+       current_streak INTEGER DEFAULT 0,
+       best_streak INTEGER DEFAULT 0,
+       profile_image TEXT,
+       profile_prompt TEXT,
+       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+       last_active TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   );
+
+   -- level_requirements 테이블 생성
+   CREATE TABLE IF NOT EXISTS level_requirements (
+       level INTEGER PRIMARY KEY,
+       required_xp INTEGER,
+       title TEXT,
+       description TEXT
+   );
+
+   -- achievements 테이블 생성
+   CREATE TABLE IF NOT EXISTS achievements (
+       achievement_id TEXT PRIMARY KEY,
+       name TEXT NOT NULL,
+       description TEXT,
+       icon TEXT,
+       requirement_type TEXT,
+       requirement_value INTEGER
+   );
+
+   -- 초기 데이터 삽입
+   INSERT INTO level_requirements (level, required_xp, title, description) VALUES
+   (1, 0, '초보자', '게임을 시작하는 단계'),
+   (2, 100, '학습자', '기본기를 다지는 단계'),
+   (3, 250, '성장자', '실력을 쌓아가는 단계'),
+   (4, 450, '숙련자', '전문성을 키우는 단계'),
+   (5, 700, '전문가', '높은 수준의 실력자'),
+   (6, 1000, '마스터', '최고 수준의 전문가'),
+   (7, 1350, '그랜드마스터', '전설적인 실력자'),
+   (8, 1750, '레전드', '신화적인 존재'),
+   (9, 2200, '미스터리', '신비로운 존재'),
+   (10, 2700, '올마이티', '전능한 존재')
+   ON CONFLICT (level) DO NOTHING;
+
+   INSERT INTO achievements (achievement_id, name, description, icon, requirement_type, requirement_value) VALUES
+   ('first_question', '첫 번째 문제', '첫 번째 문제를 해결했습니다!', '🎯', 'questions_solved', 1),
+   ('level_5', '레벨 5 달성', '레벨 5에 도달했습니다!', '⭐', 'level', 5),
+   ('level_10', '레벨 10 달성', '레벨 10에 도달했습니다!', '🌟', 'level', 10),
+   ('streak_5', '5연속 정답', '5문제 연속으로 정답을 맞췄습니다!', '🔥', 'streak', 5),
+   ('streak_10', '10연속 정답', '10문제 연속으로 정답을 맞췄습니다!', '🚀', 'streak', 10),
+   ('accuracy_80', '80% 정확도', '80% 이상의 정확도를 달성했습니다!', '🎯', 'accuracy', 80)
+   ON CONFLICT (achievement_id) DO NOTHING;
+
+   -- 인덱스 생성 (성능 최적화)
+   CREATE INDEX IF NOT EXISTS idx_users_level ON users(level);
+   CREATE INDEX IF NOT EXISTS idx_users_experience ON users(experience_points);
+   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+   ```
+3. Authentication > Providers에서 Google OAuth 활성화
+4. Google Cloud Console에서 OAuth 2.0 클라이언트 ID 생성
+5. Supabase에 Google OAuth 설정 추가
+6. Settings > API에서 URL과 anon key 복사하여 환경 변수에 설정
 
 ### 3. 애플리케이션 실행
 

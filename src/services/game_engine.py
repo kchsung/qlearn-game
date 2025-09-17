@@ -1,9 +1,8 @@
 # game_engine.py
 """
-게임 엔진 및 로직 관련 클래스들
+게임 엔진 및 로직 관련 클래스들 (Supabase 기반)
 """
 
-import sqlite3
 import hashlib
 import random
 from typing import Dict, List, Tuple, Optional
@@ -28,264 +27,301 @@ class GameEngine:
         # 난이도 보너스
         xp = int(base_xp * DIFFICULTY_MULTIPLIER.get(difficulty, 1.0))
         
-        # 추가 보너스
-        if score >= 90:
-            xp += self.xp_rewards["perfect_score"]
+        # 시간 보너스 (빠른 답변)
+        if time_taken < 30:  # 30초 이내
+            xp = int(xp * 1.2)
+        elif time_taken < 60:  # 1분 이내
+            xp = int(xp * 1.1)
         
-        if time_taken < 60:  # 1분 이내
-            xp += self.xp_rewards["fast_completion"]
+        # 토큰 효율성 보너스
+        if tokens_used < 100:  # 토큰 절약
+            xp = int(xp * 1.1)
         
-        if tokens_used < 500:  # 효율적인 토큰 사용
-            xp += self.xp_rewards["efficient_tokens"]
-        
-        return xp
+        return max(xp, 1)  # 최소 1 XP
     
-    def check_level_up(self, user_id: str) -> Tuple[bool, Optional[int]]:
-        """레벨업 체크"""
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
-        
-        # 현재 사용자 정보
-        cursor.execute('''
-            SELECT level, experience_points, total_questions_solved, correct_answers
-            FROM users WHERE user_id = ?
-        ''', (user_id,))
-        
-        user = cursor.fetchone()
-        if not user:
-            conn.close()
-            return False, None
-        
-        current_level, xp, total_q, correct_q = user
-        accuracy = (correct_q / total_q * 100) if total_q > 0 else 0
-        
-        # 다음 레벨 요구사항 확인
-        cursor.execute('''
-            SELECT required_xp, min_accuracy, required_questions
-            FROM level_requirements
-            WHERE level = ?
-        ''', (current_level + 1,))
-        
-        next_level_req = cursor.fetchone()
-        conn.close()
-        
-        if not next_level_req:
-            return False, None
-        
-        req_xp, req_accuracy, req_questions = next_level_req
-        
-        # 레벨업 조건 확인
-        if xp >= req_xp and accuracy >= req_accuracy and total_q >= req_questions:
-            return True, current_level + 1
-        
-        return False, None
+    def award_experience(self, user_id: str, xp: int) -> bool:
+        """경험치 지급"""
+        return self.db.add_experience(user_id, xp)
     
-    def generate_promotion_exam(self, user_id: str, target_level: int) -> List[Dict]:
-        """승급 시험 문제 생성"""
-        config = PROMOTION_EXAM_CONFIG.get(target_level, {"basic": 5})
-        exam_questions = []
+    def check_promotion_eligibility(self, user_id: str) -> Tuple[bool, Dict]:
+        """승급 시험 자격 확인"""
+        profile = self.db.get_user_profile(user_id)
+        if not profile:
+            return False, {}
         
-        # 문제 생성
-        for difficulty, count in config.items():
-            if difficulty == "previous_levels":
-                continue
-                
-            for _ in range(count):
-                question = QuestionGenerator.generate_question(difficulty, target_level)
-                question["id"] = f"EXAM_{target_level}_{len(exam_questions)+1}"
-                question["type"] = "exam"
-                exam_questions.append(question)
+        current_level = profile.get('level', 1)
+        current_xp = profile.get('experience_points', 0)
         
-        # 레벨 4, 5의 경우 이전 단계 문제 포함
-        if target_level >= 4:
-            # 각 이전 레벨에서 1문제씩
-            for level in range(1, target_level):
-                question = QuestionGenerator.generate_question("basic", level)
-                question["id"] = f"EXAM_{target_level}_PREV_{level}"
-                question["difficulty"] = "review"
-                question["type"] = "exam"
-                exam_questions.append(question)
+        # 다음 레벨 요구사항 확인 (간단한 계산)
+        next_level = current_level + 1
+        required_xp = next_level * 100  # 간단한 레벨업 조건
         
-        return exam_questions
+        return current_xp >= required_xp, {
+            'current_level': current_level,
+            'current_xp': current_xp,
+            'required_xp': required_xp,
+            'next_level': next_level
+        }
+    
+    def conduct_promotion_exam(self, user_id: str) -> Dict:
+        """승급 시험 진행"""
+        profile = self.db.get_user_profile(user_id)
+        if not profile:
+            return {'success': False, 'message': '사용자 정보를 찾을 수 없습니다.'}
+        
+        current_level = profile.get('level', 1)
+        next_level = current_level + 1
+        
+        # 승급 시험 설정
+        exam_config = PROMOTION_EXAM_CONFIG.get(next_level, {
+            'questions': 5,
+            'passing_score': 80,
+            'time_limit': 300
+        })
+        
+        return {
+            'success': True,
+            'exam_config': exam_config,
+            'current_level': current_level,
+            'next_level': next_level
+        }
+    
+    def process_promotion_result(self, user_id: str, score: float, time_taken: int) -> Dict:
+        """승급 시험 결과 처리"""
+        profile = self.db.get_user_profile(user_id)
+        if not profile:
+            return {'success': False, 'message': '사용자 정보를 찾을 수 없습니다.'}
+        
+        current_level = profile.get('level', 1)
+        next_level = current_level + 1
+        
+        exam_config = PROMOTION_EXAM_CONFIG.get(next_level, {
+            'passing_score': 80
+        })
+        
+        if score >= exam_config['passing_score']:
+            # 승급 성공
+            xp_reward = self.calculate_xp_reward(score, time_taken, 0, 'hard')
+            self.award_experience(user_id, xp_reward)
+            
+            return {
+                'success': True,
+                'promoted': True,
+                'new_level': next_level,
+                'xp_reward': xp_reward,
+                'message': f'축하합니다! 레벨 {next_level}로 승급했습니다!'
+            }
+        else:
+            # 승급 실패
+            return {
+                'success': True,
+                'promoted': False,
+                'current_level': current_level,
+                'message': f'아쉽게도 승급에 실패했습니다. {exam_config["passing_score"]}% 이상이 필요합니다.'
+            }
 
 
 class UserManager:
-    """사용자 관리 클래스"""
+    """사용자 관리 클래스 (Supabase 기반)"""
     
     def __init__(self, db: GameDatabase):
         self.db = db
         self.profile_gen = ProfileGenerator()
     
-    def create_user(self, username: str, email: str = None) -> str:
+    def create_user(self, username: str, email: str) -> Optional[str]:
         """새 사용자 생성"""
         try:
             user_id = hashlib.md5(username.encode()).hexdigest()[:10]
             
-            conn = self.db.get_connection()
-            cursor = conn.cursor()
+            # 프로필 이미지 생성
+            profile_image = self.profile_gen.generate_profile_image(username, 1)
             
-            try:
-                # 프로필 이미지 생성
-                profile_image = self.profile_gen.generate_profile_image(username, 1)
-                
-                cursor.execute('''
-                    INSERT INTO users (user_id, username, email, profile_image)
-                    VALUES (?, ?, ?, ?)
-                ''', (user_id, username, email, profile_image))
-                
-                conn.commit()
-                conn.close()
+            # Supabase DB에 사용자 생성
+            success = self.db.create_user_profile(user_id, username, email, profile_image)
+            
+            if success:
                 return user_id
-            except sqlite3.IntegrityError:
-                conn.close()
-                # 이미 존재하는 사용자
+            else:
+                st.error("사용자 생성 실패")
                 return None
-            except Exception as e:
-                conn.close()
-                st.error(f"사용자 생성 중 오류 발생: {str(e)}")
-                return None
+                
         except Exception as e:
-            st.error(f"사용자 생성 중 오류 발생: {str(e)}")
+            st.error(f"사용자 생성 중 오류: {str(e)}")
             return None
     
-    def get_user_profile(self, user_id: str) -> Dict:
-        """사용자 프로필 조회"""
+    def get_user_profile(self, user_id: str) -> Optional[Dict]:
+        """사용자 프로필 조회 (UI용 필드 추가)"""
         try:
-            conn = self.db.get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                SELECT u.*, l.level_name, l.level_icon
-                FROM users u
-                JOIN level_requirements l ON u.level = l.level
-                WHERE u.user_id = ?
-            ''', (user_id,))
-            
-            user = cursor.fetchone()
-            
-            if not user:
-                conn.close()
+            profile = self.db.get_user_profile(user_id)
+            if not profile:
                 return None
             
-            # 업적 조회
-            cursor.execute('''
-                SELECT a.* FROM achievements a
-                JOIN user_achievements ua ON a.achievement_id = ua.achievement_id
-                WHERE ua.user_id = ?
-            ''', (user_id,))
+            # UI에서 필요한 필드들 추가
+            level = profile.get('level', 1)
+            current_xp = profile.get('experience_points', 0)
             
-            achievements = cursor.fetchall()
+            # 레벨 정보 추가
+            level_info = self._get_level_info(level)
+            profile.update({
+                'level_icon': level_info['icon'],
+                'level_name': level_info['name'],
+                'xp': current_xp,
+                'next_level_xp': level_info['next_requirement'],
+                'accuracy': self._calculate_accuracy(profile),
+                'total_questions': profile.get('total_questions_solved', 0),
+                'achievements': self.get_user_achievements(user_id)
+            })
             
-            # 다음 레벨까지 필요한 경험치
-            cursor.execute('''
-                SELECT required_xp FROM level_requirements WHERE level = ?
-            ''', (user[3] + 1,))  # user[3] is level
+            return profile
+        except Exception as e:
+            st.error(f"사용자 프로필 조회 중 오류: {str(e)}")
+            return None
+    
+    def _get_level_info(self, level: int) -> Dict:
+        """레벨 정보 조회 (DB에서)"""
+        try:
+            # DB에서 레벨 정보 조회
+            level_info = self.db._get_level_info(level)
             
-            next_level_xp = cursor.fetchone()
-            
-            conn.close()
+            # 다음 레벨 요구사항 계산
+            next_level = level + 1
+            next_requirement = next_level * 100  # 간단한 계산
             
             return {
-                "user_id": user[0],
-                "username": user[1],
-                "level": user[3],
-                "level_name": user[-2],
-                "level_icon": user[-1],
-                "xp": user[4],
-                "next_level_xp": next_level_xp[0] if next_level_xp else user[4],
-                "total_questions": user[5],
-                "correct_answers": user[6],
-                "accuracy": (user[6] / user[5] * 100) if user[5] > 0 else 0.0,
-                "current_streak": user[7],
-                "best_streak": user[8],
-                "profile_image": user[9],
-                "achievements": achievements
+                'name': level_info['name'],
+                'icon': level_info['icon'],
+                'next_requirement': next_requirement
             }
         except Exception as e:
-            st.error(f"사용자 프로필 조회 중 오류 발생: {str(e)}")
-            return None
+            st.error(f"레벨 정보 조회 오류: {str(e)}")
+            # 기본값 반환
+            return {
+                'name': '초보자',
+                'icon': '🌱',
+                'next_requirement': 100
+            }
     
-    def update_user_stats(self, user_id: str, grade_result: Dict, xp_earned: int):
-        """사용자 통계 업데이트"""
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
+    def _calculate_accuracy(self, profile: Dict) -> float:
+        """정답률 계산"""
+        total_questions = profile.get('total_questions_solved', 0)
+        correct_answers = profile.get('correct_answers', 0)
         
-        if grade_result['passed']:
-            cursor.execute('''
-                UPDATE users 
-                SET experience_points = experience_points + ?,
-                    total_questions_solved = total_questions_solved + 1,
-                    correct_answers = correct_answers + 1,
-                    current_streak = current_streak + 1,
-                    best_streak = MAX(best_streak, current_streak + 1),
-                    last_active = CURRENT_TIMESTAMP
-                WHERE user_id = ?
-            ''', (xp_earned, user_id))
-        else:
-            cursor.execute('''
-                UPDATE users 
-                SET experience_points = experience_points + ?,
-                    total_questions_solved = total_questions_solved + 1,
-                    current_streak = 0,
-                    last_active = CURRENT_TIMESTAMP
-                WHERE user_id = ?
-            ''', (xp_earned // 5, user_id))  # 실패해도 약간의 경험치
+        if total_questions == 0:
+            return 0.0
         
-        # 업적 체크
-        self._check_achievements(cursor, user_id, grade_result)
-        
-        conn.commit()
-        conn.close()
+        return (correct_answers / total_questions) * 100
     
-    def _check_achievements(self, cursor, user_id: str, result: Dict):
-        """업적 달성 체크"""
-        # 첫 문제 해결
-        cursor.execute('''
-            SELECT COUNT(*) FROM attempt_history WHERE user_id = ? AND passed = 1
-        ''', (user_id,))
-        
-        if cursor.fetchone()[0] == 1:
-            self._grant_achievement(cursor, user_id, "first_solve")
-        
-        # 연속 정답 체크
-        cursor.execute('''
-            SELECT current_streak FROM users WHERE user_id = ?
-        ''', (user_id,))
-        
-        streak = cursor.fetchone()[0]
-        if streak == 5:
-            self._grant_achievement(cursor, user_id, "streak_5")
-        elif streak == 10:
-            self._grant_achievement(cursor, user_id, "streak_10")
-        
-        # 스피드 체크
-        if result['time_taken'] < 30:
-            self._grant_achievement(cursor, user_id, "speed_demon")
-        
-        # 토큰 효율성
-        if result['tokens_used'] < 200:
-            self._grant_achievement(cursor, user_id, "token_saver")
-    
-    def _grant_achievement(self, cursor, user_id: str, achievement_id: str):
-        """업적 부여"""
+    def get_user_achievements(self, user_id: str) -> List[Dict]:
+        """사용자 업적 조회"""
         try:
-            cursor.execute('''
-                INSERT INTO user_achievements (user_id, achievement_id)
-                VALUES (?, ?)
-            ''', (user_id, achievement_id))
+            profile = self.db.get_user_profile(user_id)
+            if not profile:
+                return []
             
-            # 업적 보상 경험치
-            cursor.execute('''
-                SELECT xp_reward FROM achievements WHERE achievement_id = ?
-            ''', (achievement_id,))
+            level = profile.get('level', 1)
+            total_questions = profile.get('total_questions_solved', 0)
+            correct_answers = profile.get('correct_answers', 0)
+            best_streak = profile.get('best_streak', 0)
             
-            xp_reward = cursor.fetchone()[0]
+            unlocked_achievements = []
             
-            cursor.execute('''
-                UPDATE users SET experience_points = experience_points + ?
-                WHERE user_id = ?
-            ''', (xp_reward, user_id))
+            # 업적 확인 로직
+            if total_questions >= 1:
+                unlocked_achievements.append({
+                    'achievement_id': 'first_question',
+                    'name': '첫 번째 문제',
+                    'description': '첫 번째 문제를 해결했습니다!',
+                    'icon': '🎯'
+                })
             
-        except sqlite3.IntegrityError:
-            # 이미 획득한 업적
-            pass
+            if level >= 5:
+                unlocked_achievements.append({
+                    'achievement_id': 'level_5',
+                    'name': '레벨 5 달성',
+                    'description': '레벨 5에 도달했습니다!',
+                    'icon': '⭐'
+                })
+            
+            if level >= 10:
+                unlocked_achievements.append({
+                    'achievement_id': 'level_10',
+                    'name': '레벨 10 달성',
+                    'description': '레벨 10에 도달했습니다!',
+                    'icon': '🌟'
+                })
+            
+            if best_streak >= 5:
+                unlocked_achievements.append({
+                    'achievement_id': 'streak_5',
+                    'name': '5연속 정답',
+                    'description': '5문제 연속으로 정답을 맞췄습니다!',
+                    'icon': '🔥'
+                })
+            
+            if best_streak >= 10:
+                unlocked_achievements.append({
+                    'achievement_id': 'streak_10',
+                    'name': '10연속 정답',
+                    'description': '10문제 연속으로 정답을 맞췄습니다!',
+                    'icon': '🚀'
+                })
+            
+            if total_questions > 0 and (correct_answers / total_questions) >= 0.8:
+                unlocked_achievements.append({
+                    'achievement_id': 'accuracy_80',
+                    'name': '80% 정확도',
+                    'description': '80% 이상의 정확도를 달성했습니다!',
+                    'icon': '🎯'
+                })
+            
+            return unlocked_achievements
+        except Exception as e:
+            st.error(f"업적 조회 중 오류: {str(e)}")
+            return []
+    
+    def update_user_stats(self, user_id: str, is_correct: bool, xp_earned: int = 0) -> bool:
+        """사용자 통계 업데이트"""
+        try:
+            # 답변 기록
+            success = self.db.record_answer(user_id, is_correct)
+            
+            # 경험치 지급
+            if xp_earned > 0:
+                success = success and self.db.add_experience(user_id, xp_earned)
+            
+            return success
+        except Exception as e:
+            st.error(f"사용자 통계 업데이트 중 오류: {str(e)}")
+            return False
+    
+    def get_user_stats(self, user_id: str) -> Dict:
+        """사용자 통계 조회"""
+        try:
+            return self.db.get_user_stats(user_id)
+        except Exception as e:
+            st.error(f"사용자 통계 조회 중 오류: {str(e)}")
+            return {}
+    
+    def get_level_progress(self, user_id: str) -> Dict:
+        """레벨 진행률 조회"""
+        try:
+            return self.db.get_level_progress(user_id)
+        except Exception as e:
+            st.error(f"레벨 진행률 조회 중 오류: {str(e)}")
+            return {}
+    
+    def update_profile_prompt(self, user_id: str, prompt: str) -> bool:
+        """프로필 프롬프트 업데이트"""
+        try:
+            return self.db.update_profile_prompt(user_id, prompt)
+        except Exception as e:
+            st.error(f"프로필 프롬프트 업데이트 중 오류: {str(e)}")
+            return False
+    
+    def get_profile_prompt(self, user_id: str) -> Optional[str]:
+        """프로필 프롬프트 조회"""
+        try:
+            return self.db.get_profile_prompt(user_id)
+        except Exception as e:
+            st.error(f"프로필 프롬프트 조회 중 오류: {str(e)}")
+            return None
