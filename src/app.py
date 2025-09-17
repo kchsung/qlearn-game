@@ -134,8 +134,6 @@ class AIAssessmentGame:
             st.error("사용자 프로필을 불러올 수 없습니다.")
             return
         
-        # 메인 타이틀
-        st.title(f"🎮 AI Master Quest - {profile['username']}님의 여정")
         
         # 탭 구성
         tab1, tab2, tab3, tab4 = st.tabs(["🎯 도전하기", "📊 승급 시험", "🏆 리더보드", "📈 통계"])
@@ -160,12 +158,8 @@ class AIAssessmentGame:
         from ui.pages.challenge_page import render_challenge_tab
         render_challenge_tab(profile, self._submit_answer_wrapper)
     
-    def _submit_answer_wrapper(self, question: Dict, answer: str) -> Dict:
+    def _submit_answer_wrapper(self, user_id: str, question: Dict, answer: str) -> Dict:
         """답변 제출 래퍼"""
-        user_id = self._get_current_user_id()
-        if not user_id:
-            st.error("사용자 ID를 찾을 수 없습니다.")
-            return {}
         return self.submit_answer(user_id, question, answer)
     
     def render_sidebar(self):

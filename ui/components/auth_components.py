@@ -120,7 +120,7 @@ def render_user_sidebar(profile: dict, on_logout: Callable[[], None]):
             st.markdown(f'<img src="{profile["profile_image"]}" width="150">', unsafe_allow_html=True)
         
         # 사용자 정보
-        st.markdown(f"### {profile.get('username', 'Unknown')}")
+        st.markdown("### AI Master Quest")
         
         # 레벨 정보 (기본값 처리)
         level = profile.get('level', 1)

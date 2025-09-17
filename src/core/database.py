@@ -22,7 +22,6 @@ class GameDatabase:
         try:
             # Supabase에서는 테이블이 이미 존재한다고 가정
             # 필요시 여기서 테이블 생성 로직 추가
-            st.info("✅ Supabase 데이터베이스 연결 확인")
             return True
         except Exception as e:
             st.error(f"Supabase 데이터베이스 초기화 오류: {str(e)}")
@@ -270,14 +269,34 @@ class GameDatabase:
             st.error(f"프로필 프롬프트 조회 오류: {str(e)}")
             return None
     
-    def get_random_question(self, difficulty: str = 'medium', area: str = 'ai') -> Optional[Dict[str, Any]]:
-        """랜덤 문제 조회"""
+    def get_random_question(self, difficulty: str = '보통', area: str = 'ai') -> Optional[Dict[str, Any]]:
+        """랜덤 문제 조회 (다양한 문제를 위해 랜덤 선택)"""
         try:
-            result = self.supabase.table('questions').select('*').eq('difficulty', difficulty).eq('area', area).limit(1).execute()
+            st.info(f"🔍 문제 조회 중... 난이도: {difficulty}")
             
-            if result.data:
-                return result.data[0]
-            return None
+            # 먼저 해당 난이도의 모든 문제 확인
+            all_questions = self.supabase.table('questions').select('*').eq('difficulty', difficulty).execute()
+            st.info(f"📊 {difficulty} 난이도 전체 문제 수: {len(all_questions.data) if all_questions.data else 0}")
+            
+            if all_questions.data:
+                # 랜덤하게 문제 선택 (다양한 문제를 위해)
+                import random
+                random_question = random.choice(all_questions.data)
+                st.success(f"✅ 랜덤 문제 선택: {random_question.get('id', 'N/A')}")
+                
+                # steps 필드가 있는지 확인하고 파싱
+                if random_question.get('steps'):
+                    try:
+                        if isinstance(random_question['steps'], str):
+                            random_question['steps'] = json.loads(random_question['steps'])
+                    except:
+                        st.warning("⚠️ steps 필드 파싱 실패")
+                
+                return random_question
+            else:
+                st.error(f"❌ {difficulty} 난이도에 문제가 없습니다.")
+                return None
+                
         except Exception as e:
             st.error(f"문제 조회 오류: {str(e)}")
             return None

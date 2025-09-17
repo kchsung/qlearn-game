@@ -31,7 +31,6 @@ class SupabaseAuth:
 
         # ✅ PKCE + storage + cache 적용된 클라이언트 획득
         self.supabase = _get_supabase(self.supabase_url, self.supabase_anon_key)
-        st.info(f"✅ Supabase 클라이언트 초기화 완료 - redirect: {self.redirect_uri}")
 
     def get_google_auth_url(self) -> str:
         """Google OAuth URL 생성"""

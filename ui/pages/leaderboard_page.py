@@ -10,7 +10,6 @@ from typing import Dict
 
 def render_leaderboard(db, current_username: str):
     """리더보드 렌더링"""
-    st.header("🏆 리더보드")
     
     # 리더보드 조회
     try:

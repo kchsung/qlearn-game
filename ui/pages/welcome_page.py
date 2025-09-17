@@ -9,7 +9,6 @@ import streamlit as st
 def render_welcome_page():
     """환영 페이지 렌더링"""
     st.title("🎮 AI Master Quest")
-    st.markdown("### AI 마스터가 되는 여정에 오신 것을 환영합니다!")
     
     col1, col2, col3 = st.columns(3)
     

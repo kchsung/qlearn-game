@@ -9,7 +9,6 @@ from typing import Dict
 
 def render_promotion_exam(profile: Dict, game_engine, db, user_id: str):
     """승급 시험 렌더링"""
-    st.header("📊 승급 시험")
     
     # 승급 자격 확인
     can_promote, promotion_info = game_engine.check_promotion_eligibility(user_id)

@@ -1,23 +1,32 @@
 # ui/pages/challenge_page.py
 """
-문제 도전 페이지 컴포넌트
+도전하기 페이지 컴포넌트 (Supabase 기반)
 """
 
 import streamlit as st
+import json
 from typing import Dict, Callable
-from src.services.ai_services import QuestionGenerator
+from src.core.database import GameDatabase
 
 
 def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
     """도전하기 탭 렌더링"""
-    st.header("문제 도전하기")
+    
+    # 난이도 5단계 정의 (DB의 difficulty 필드와 매칭)
+    difficulties = {
+        "아주 쉬움": "아주 쉬움",
+        "쉬움": "쉬움", 
+        "보통": "보통",
+        "어려움": "어려움",
+        "아주 어려움": "아주 어려움"
+    }
     
     # 레벨에 따른 접근 가능 난이도
     available_difficulties = []
     if profile['level'] >= 1:
-        available_difficulties.append("basic")
+        available_difficulties.extend(["아주 쉬움", "쉬움"])
     if profile['level'] >= 2:
-        available_difficulties.append("intermediate")
+        available_difficulties.append("보통")
     if profile['level'] >= 3:
         available_difficulties.append("advanced")
     
@@ -26,97 +35,304 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
     with col1:
         difficulty = st.selectbox(
             "난이도 선택",
-            available_difficulties,
-            format_func=lambda x: {"basic": "초급", "intermediate": "중급", "advanced": "고급"}[x]
+            available_difficulties
         )
         
-        if st.button("🎲 문제 받기", type="primary", use_container_width=True):
-            # 문제 생성
-            st.session_state.current_question = QuestionGenerator.generate_question(
-                difficulty, profile['level']
-            )
-            st.rerun()
+        col_btn1, col_btn2 = st.columns(2)
+        
+        with col_btn1:
+            if st.button("🎲 문제 받기", type="primary", use_container_width=True):
+                # DB에서 문제 가져오기
+                db = GameDatabase()
+                question = db.get_random_question(difficulty=difficulty)
+                
+                if question:
+                    st.session_state.current_question = question
+                    st.session_state.current_step = 0
+                    st.session_state.user_answers = []
+                    st.session_state.last_difficulty = difficulty  # 난이도 저장
+                    st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
+                    st.rerun()
+                else:
+                    st.error("해당 난이도의 문제를 찾을 수 없습니다.")
+        
+        with col_btn2:
+            if st.button("🔄 다른 문제", use_container_width=True):
+                # 다른 문제 가져오기 (현재 문제와 다른 문제)
+                db = GameDatabase()
+                current_question_id = None
+                if 'current_question' in st.session_state:
+                    current_question_id = st.session_state.current_question.get('id')
+                
+                # 최대 5번 시도해서 다른 문제 찾기
+                for attempt in range(5):
+                    question = db.get_random_question(difficulty=difficulty)
+                    
+                    if question and question.get('id') != current_question_id:
+                        st.session_state.current_question = question
+                        st.session_state.current_step = 0
+                        st.session_state.user_answers = []
+                        st.session_state.last_difficulty = difficulty  # 난이도 저장
+                        st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
+                        st.rerun()
+                        break
+                    elif attempt == 4:  # 마지막 시도
+                        st.warning("다른 문제를 찾을 수 없습니다. 같은 문제가 표시됩니다.")
+                        if question:
+                            st.session_state.current_question = question
+                            st.session_state.current_step = 0
+                            st.session_state.user_answers = []
+                            st.session_state.last_difficulty = difficulty
+                            st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
+                            st.rerun()
+                        else:
+                            st.error("해당 난이도의 문제를 찾을 수 없습니다.")
     
     with col2:
+        # 현재 문제 표시
         if 'current_question' in st.session_state:
             question = st.session_state.current_question
+            current_step = st.session_state.get('current_step', 0)
             
-            st.info(f"문제 난이도: {question['difficulty']}")
-            st.markdown(f"### 문제")
-            st.markdown(question['question'])
-            
-            # 답변 입력
-            answer = st.text_area("답변을 입력하세요", height=200)
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                if st.button("💡 힌트 (XP -10)", disabled=profile['level'] < 2):
-                    st.info("힌트: AI 도구의 특성을 고려하여 접근하세요.")
-            
-            with col2:
-                if st.button("📝 제출하기", type="primary"):
-                    if answer:
-                        with st.spinner("채점 중..."):
-                            result = on_submit_answer(question, answer)
-                        
-                        # 결과 표시
-                        if result['passed']:
-                            st.success(f"🎉 정답! 점수: {result['score']:.1f}점")
-                            st.success(f"획득 경험치: +{result['xp_earned']} XP")
-                        else:
-                            st.error(f"아쉽네요. 점수: {result['score']:.1f}점")
-                        
-                        # 피드백
-                        with st.expander("상세 피드백"):
-                            st.markdown(result['feedback'])
-                        
-                        # 레벨업 체크
-                        if result['level_up']:
-                            st.balloons()
-                            st.success(f"🎊 레벨업! 레벨 {result['new_level']}에 도달했습니다!")
-                        
-                        # 효율성 표시
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.metric("소요 시간", f"{result['time_taken']}초")
-                        with col2:
-                            st.metric("토큰 사용량", result['tokens_used'])
+            # steps 정보 파싱
+            steps = []
+            if question.get('steps'):
+                try:
+                    if isinstance(question['steps'], str):
+                        steps = json.loads(question['steps'])
                     else:
-                        st.warning("답변을 입력해주세요.")
+                        steps = question['steps']
+                except:
+                    steps = []
             
-            with col3:
-                if st.button("🔄 다른 문제"):
-                    del st.session_state.current_question
-                    st.rerun()
+            if not steps:
+                st.error("문제에 단계 정보가 없습니다.")
+                return
+            
+            # 현재 단계 표시
+            if current_step < len(steps):
+                step = steps[current_step]
+                
+                # 1. 시나리오 내용 표시 (맨 상단)
+                if question.get('scenario'):
+                    st.markdown("#### 📋 시나리오")
+                    st.markdown(question['scenario'])
+                    st.markdown("---")
+                
+                # 2. 단계 정보와 제목 (글씨 크기 맞춤)
+                st.markdown(f"**단계 {current_step + 1}/{len(steps)}: {step.get('title', '문제')}**")
+                
+                # 문제 내용 (text 필드 사용)
+                if step.get('text'):
+                    st.markdown(step['text'])
+                elif step.get('content'):
+                    st.markdown(step['content'])
+                
+                # 객관식 선택지
+                if step.get('options'):
+                    options = step['options']
+                    if isinstance(options, str):
+                        try:
+                            options = json.loads(options)
+                        except:
+                            options = [options]
+                    
+                    # options가 딕셔너리 리스트인 경우 처리
+                    if isinstance(options, list) and len(options) > 0 and isinstance(options[0], dict):
+                        # 딕셔너리 형태의 선택지 처리
+                        option_texts = []
+                        option_feedbacks = {}
+                        
+                        for i, option in enumerate(options):
+                            if isinstance(option, dict):
+                                option_id = option.get('id', f'Option {i+1}')
+                                option_text = option.get('text', f'선택지 {i+1}')
+                                option_feedback = option.get('feedback', '')
+                                
+                                # 텍스트에서 이미 "A. " 형태로 시작하는지 확인
+                                if option_text.startswith(f"{option_id}. "):
+                                    # 이미 "A. " 형태면 그대로 사용
+                                    clean_text = option_text
+                                else:
+                                    # "A. " 형태가 아니면 텍스트만 사용
+                                    clean_text = option_text
+                                
+                                option_texts.append(clean_text)
+                                option_feedbacks[clean_text] = option_feedback
+                            else:
+                                option_texts.append(str(option))
+                        
+                        selected_option = st.radio(
+                            "답안을 선택하세요:",
+                            option_texts,
+                            key=f"step_{current_step}"
+                        )
+                        
+                        # 선택된 옵션의 피드백 표시
+                        if selected_option in option_feedbacks and option_feedbacks[selected_option]:
+                            st.info(f"💡 **피드백**: {option_feedbacks[selected_option]}")
+                    
+                    else:
+                        # 일반적인 문자열 리스트 처리
+                        selected_option = st.radio(
+                            "답안을 선택하세요:",
+                            options,
+                            key=f"step_{current_step}"
+                        )
+                        
+                        # 피드백 표시
+                        if step.get('feedback'):
+                            feedback = step['feedback']
+                            if isinstance(feedback, str):
+                                try:
+                                    feedback = json.loads(feedback)
+                                except:
+                                    feedback = {opt: f"{opt}에 대한 피드백" for opt in options}
+                            
+                            if selected_option in feedback:
+                                st.info(f"💡 **피드백**: {feedback[selected_option]}")
+                
+                # 버튼 영역
+                col_prev, col_next = st.columns(2)
+                
+                with col_prev:
+                    if current_step > 0:
+                        if st.button("⬅️ 이전", use_container_width=True):
+                            st.session_state.current_step -= 1
+                            st.rerun()
+                
+                with col_next:
+                    if current_step < len(steps) - 1:
+                        if st.button("다음 ➡️", type="primary", use_container_width=True):
+                            # 현재 답안 저장
+                            if 'user_answers' not in st.session_state:
+                                st.session_state.user_answers = []
+                            st.session_state.user_answers.append(selected_option)
+                            st.session_state.current_step += 1
+                            st.rerun()
+                    else:
+                        # 마지막 단계 - 제출 버튼
+                        if st.button("📤 제출", type="primary", use_container_width=True):
+                            # 모든 답안 저장
+                            if 'user_answers' not in st.session_state:
+                                st.session_state.user_answers = []
+                            st.session_state.user_answers.append(selected_option)
+                            
+                            # 답안 제출
+                            user_id = st.session_state.get('user_id')
+                            if user_id:
+                                submit_answers(question, st.session_state.user_answers, on_submit_answer, user_id)
+                            else:
+                                st.error("사용자 ID를 찾을 수 없습니다.")
+            
+            else:
+                st.success("모든 단계를 완료했습니다!")
+        
         else:
-            st.info("👈 왼쪽에서 난이도를 선택하고 '문제 받기' 버튼을 클릭하세요!")
+            st.info("난이도를 선택하고 '문제 받기' 버튼을 클릭하세요.")
+        
+        # 디버깅 정보 (맨 아래)
+        if 'current_question' in st.session_state:
+            question = st.session_state.current_question
+            st.markdown("---")
+            st.markdown("#### 🔍 디버깅 정보")
+            st.write("**question.scenario:**", question.get('scenario'))
+            st.write("**steps 구조:**", question.get('steps'))
+
+
+def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callable, user_id: str):
+    """답안 제출 처리"""
+    try:
+        # 답안을 문자열로 변환
+        answer_text = json.dumps(user_answers, ensure_ascii=False)
+        
+        # 제출 처리
+        result = on_submit_answer(
+            user_id,
+            question,
+            answer_text
+        )
+        
+        if result.get('success', True):
+            st.success("✅ 답안이 제출되었습니다!")
             
-            # 난이도별 설명
-            st.markdown("### 📚 난이도 가이드")
+            # 결과 표시
+            if result.get('passed'):
+                st.success(f"🎉 통과! 점수: {result.get('score', 0):.1f}점")
+                st.success(f"💎 획득 XP: {result.get('xp_earned', 0)}")
+            else:
+                st.warning(f"❌ 실패. 점수: {result.get('score', 0):.1f}점")
             
-            col1, col2, col3 = st.columns(3)
+            # 피드백 표시
+            if result.get('feedback'):
+                st.info(f"📝 **피드백**: {result['feedback']}")
             
-            with col1:
-                st.markdown("""
-                **초급 (Basic)**
-                - AI 도구 기본 사용법
-                - 간단한 프롬프트 작성
-                - 기본적인 AI 활용
-                """)
+            # 레벨업 체크
+            if result.get('level_up'):
+                st.balloons()
+                st.success(f"🎊 레벨업! 새로운 레벨: {result.get('new_level')}")
             
+            # 세션 정리
+            if 'current_question' in st.session_state:
+                del st.session_state.current_question
+            if 'current_step' in st.session_state:
+                del st.session_state.current_step
+            if 'user_answers' in st.session_state:
+                del st.session_state.user_answers
+            
+            # 다른 문제 받기 버튼 표시
+            st.markdown("---")
+            col1, col2, col3 = st.columns([1, 1, 1])
             with col2:
-                st.markdown("""
-                **중급 (Intermediate)**
-                - 복잡한 작업 자동화
-                - 창의적인 AI 활용
-                - 비즈니스 응용
-                """)
+                if st.button("🔄 다른 문제 받기", type="primary", use_container_width=True):
+                    # 현재 난이도 유지하면서 새 문제 받기
+                    difficulty = st.session_state.get('last_difficulty', '보통')
+                    db = GameDatabase()
+                    current_question_id = None
+                    if 'current_question' in st.session_state:
+                        current_question_id = st.session_state.current_question.get('id')
+                    
+                    # 최대 5번 시도해서 다른 문제 찾기
+                    for attempt in range(5):
+                        question = db.get_random_question(difficulty=difficulty)
+                        
+                        if question and question.get('id') != current_question_id:
+                            st.session_state.current_question = question
+                            st.session_state.current_step = 0
+                            st.session_state.user_answers = []
+                            st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
+                            st.rerun()
+                            break
+                        elif attempt == 4:  # 마지막 시도
+                            st.warning("다른 문제를 찾을 수 없습니다. 같은 문제가 표시됩니다.")
+                            if question:
+                                st.session_state.current_question = question
+                                st.session_state.current_step = 0
+                                st.session_state.user_answers = []
+                                st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
+                                st.rerun()
+                            else:
+                                st.error("해당 난이도의 문제를 찾을 수 없습니다.")
             
-            with col3:
-                st.markdown("""
-                **고급 (Advanced)**
-                - 혁신적인 솔루션 설계
-                - 전략적 AI 활용
-                - 비즈니스 모델 창출
-                """)
+            st.rerun()
+        else:
+            st.error(f"❌ 제출 실패: {result.get('message', '알 수 없는 오류')}")
+            
+    except Exception as e:
+        st.error(f"답안 제출 중 오류가 발생했습니다: {str(e)}")
+
+
+def render_difficulty_guide():
+    """난이도 가이드 표시"""
+    st.markdown("### 📚 난이도 가이드")
+    
+    difficulties_info = {
+        "아주 쉬움": "기본적인 AI 개념과 용어",
+        "쉬움": "간단한 AI 활용 사례",
+        "보통": "AI 모델의 원리와 적용",
+        "어려움": "복잡한 AI 시스템 설계",
+        "아주 어려움": "고급 AI 기술과 최신 트렌드"
+    }
+    
+    for difficulty, description in difficulties_info.items():
+        st.markdown(f"**{difficulty}**: {description}")

@@ -11,7 +11,6 @@ from typing import Dict
 
 def render_user_stats(db, user_id: str):
     """사용자 통계 렌더링"""
-    st.header("📈 내 통계")
     
     try:
         # 사용자 통계 조회
