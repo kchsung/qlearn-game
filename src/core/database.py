@@ -269,6 +269,18 @@ class GameDatabase:
             st.error(f"프로필 프롬프트 조회 오류: {str(e)}")
             return None
     
+    def get_prompt_by_id(self, prompt_id: str) -> Optional[str]:
+        """ID로 프롬프트 조회"""
+        try:
+            result = self.supabase.table('prompts').select('prompt_text').eq('id', prompt_id).execute()
+            
+            if result.data and len(result.data) > 0:
+                return result.data[0].get('prompt_text')
+            return None
+        except Exception as e:
+            st.error(f"프롬프트 조회 오류: {str(e)}")
+            return None
+    
     def get_random_question(self, difficulty: str = '보통', area: str = 'ai') -> Optional[Dict[str, Any]]:
         """랜덤 문제 조회 (다양한 문제를 위해 랜덤 선택)"""
         try:

@@ -238,15 +238,51 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
             st.markdown("#### 🔍 디버깅 정보")
             st.write("**question.scenario:**", question.get('scenario'))
             st.write("**steps 구조:**", question.get('steps'))
+            
+            # 프롬프트 입력 데이터 표시
+            if 'submission_data' in st.session_state:
+                st.markdown("#### 📝 프롬프트 Input JSON")
+                st.json(st.session_state.submission_data)
+            
+            # 프롬프트 텍스트 표시
+            if 'prompt_text' in st.session_state:
+                st.markdown("#### 📋 System 프롬프트")
+                st.text_area("프롬프트 내용:", st.session_state.prompt_text, height=200, disabled=True)
+            
+            # AI 응답 표시
+            if 'ai_response' in st.session_state:
+                st.markdown("#### 🤖 AI 응답")
+                ai_response = st.session_state.ai_response
+                if ai_response.get('error'):
+                    st.error(f"AI 응답 오류: {ai_response['error']}")
+                else:
+                    st.json(ai_response)
 
 
 def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callable, user_id: str):
     """답안 제출 처리"""
     try:
-        # 답안을 문자열로 변환
-        answer_text = json.dumps(user_answers, ensure_ascii=False)
+        # 1. 답안을 JSON 구조로 변환
+        submission_data = create_submission_json(question, user_answers)
         
-        # 제출 처리
+        # 2. Supabase에서 프롬프트 가져오기
+        db = GameDatabase()
+        prompt = db.get_prompt_by_id("1afe1512-9a7a-4eee-b316-1734b9c81f3a")
+        
+        if not prompt:
+            st.error("❌ 프롬프트를 찾을 수 없습니다.")
+            return
+        
+        # 3. 프롬프트 호출 및 답변 받기
+        ai_response = call_ai_with_prompt(prompt, submission_data)
+        
+        # 4. AI 응답과 입력 데이터를 세션에 저장 (디버깅 정보용)
+        st.session_state.ai_response = ai_response
+        st.session_state.submission_data = submission_data
+        st.session_state.prompt_text = prompt
+        
+        # 5. 기존 채점 시스템도 유지
+        answer_text = json.dumps(user_answers, ensure_ascii=False)
         result = on_submit_answer(
             user_id,
             question,
@@ -320,6 +356,128 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
             
     except Exception as e:
         st.error(f"답안 제출 중 오류가 발생했습니다: {str(e)}")
+
+
+def create_submission_json(question: Dict, user_answers: list) -> Dict:
+    """문제와 답안을 JSON 구조로 변환"""
+    try:
+        # steps에서 문제 정보 추출
+        steps = question.get('steps', [])
+        if isinstance(steps, str):
+            steps = json.loads(steps)
+        
+        # answer_key, weights_map, feedback_map 생성
+        answer_key = []
+        weights_map = []
+        feedback_map = []
+        
+        for step in steps:
+            options = step.get('options', [])
+            if isinstance(options, str):
+                try:
+                    options = json.loads(options)
+                except:
+                    options = []
+            
+            # answer_key (정답) - 임시로 첫 번째 옵션을 정답으로 설정
+            if options and len(options) > 0:
+                answer_key.append(options[0].get('id', 'A'))
+            else:
+                answer_key.append('A')
+            
+            # weights_map 생성
+            weights = {}
+            for option in options:
+                if isinstance(option, dict):
+                    option_id = option.get('id', 'A')
+                    weight = option.get('weight', 0.5)  # 기본값 0.5
+                    weights[option_id] = weight
+            weights_map.append(weights)
+            
+            # feedback_map 생성
+            feedbacks = {}
+            for option in options:
+                if isinstance(option, dict):
+                    option_id = option.get('id', 'A')
+                    feedback = option.get('feedback', f'{option_id} 선택지에 대한 피드백')
+                    feedbacks[option_id] = feedback
+            feedback_map.append(feedbacks)
+        
+        # sessions 생성
+        sessions = []
+        for answer in user_answers:
+            if isinstance(answer, dict):
+                sessions.append({"selected_option_id": answer.get('selected_option_id', 'A')})
+            else:
+                # 문자열인 경우 첫 번째 문자를 ID로 사용
+                option_id = str(answer)[0] if answer else 'A'
+                sessions.append({"selected_option_id": option_id})
+        
+        # 최종 JSON 구조 생성
+        submission_data = {
+            "problem": {
+                "lang": "kr",
+                "problemTitle": question.get('question_text', '문제 제목'),
+                "scenario": question.get('scenario', ''),
+                "answer_key": answer_key,
+                "weights_map": weights_map,
+                "feedback_map": feedback_map
+            },
+            "sessions": sessions
+        }
+        
+        return submission_data
+        
+    except Exception as e:
+        st.error(f"JSON 구조 생성 중 오류: {str(e)}")
+        return {}
+
+
+def call_ai_with_prompt(system_prompt: str, submission_data: Dict) -> Dict:
+    """프롬프트와 데이터를 사용하여 AI 호출"""
+    try:
+        # OpenAI 클라이언트 확인
+        from src.core.config import OPENAI_API_KEY
+        if not OPENAI_API_KEY:
+            return {"error": "OpenAI API 키가 설정되지 않았습니다."}
+        
+        from openai import OpenAI
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        
+        # 사용자 프롬프트 생성 (제출 데이터 포함)
+        user_prompt = f"""
+다음 데이터를 분석해주세요:
+
+{json.dumps(submission_data, ensure_ascii=False, indent=2)}
+
+위 데이터를 바탕으로 분석 결과를 JSON 형태로 제공해주세요.
+"""
+        
+        # OpenAI API 호출
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2000
+        )
+        
+        # 응답 파싱
+        content = response.choices[0].message.content
+        
+        try:
+            # JSON 파싱 시도
+            ai_response = json.loads(content)
+        except:
+            # JSON 파싱 실패 시 텍스트로 반환
+            ai_response = {"response": content, "parsed": False}
+        
+        return ai_response
+        
+    except Exception as e:
+        return {"error": f"AI 호출 중 오류: {str(e)}"}
 
 
 def render_difficulty_guide():
