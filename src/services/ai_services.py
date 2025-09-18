@@ -95,7 +95,7 @@ class AutoGrader:
         criteria = self.grading_criteria.get(level, self.grading_criteria["basic"])
         
         user_prompt = f"""
-문제: {question['question']}
+문제: {question.get('question_text', question.get('question', '문제 없음'))}
 
 학생 답변: {answer}
 

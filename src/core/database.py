@@ -313,17 +313,24 @@ class GameDatabase:
             st.error(f"문제 조회 오류: {str(e)}")
             return None
     
-    def save_user_answer(self, user_id: str, question_id: str, user_answer: str, score: float, time_taken: int, tokens_used: int) -> bool:
+    def save_user_answer(self, user_id: str, question_id: str, user_answer: str, score: float, time_taken: int, tokens_used: int, pass_fail: str = None, detail: str = None) -> bool:
         """사용자 답변 저장"""
         try:
-            result = self.supabase.table('user_answers').insert({
+            data = {
                 'user_id': user_id,
                 'question_id': question_id,
-                'user_answer': user_answer,
+                'answer': user_answer,  # user_answer -> answer로 변경
                 'score': score,
                 'time_taken': time_taken,
                 'tokens_used': tokens_used
-            }).execute()
+            }
+            
+            # result 필드에 pass_fail 값 저장 (enum 값 확인 필요)
+            # TODO: q_result enum에 정의된 값으로 변경 필요
+            # if pass_fail is not None:
+            #     data['result'] = pass_fail
+            
+            result = self.supabase.table('user_answers').insert(data).execute()
             
             return len(result.data) > 0
         except Exception as e:

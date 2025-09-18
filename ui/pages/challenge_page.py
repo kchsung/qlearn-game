@@ -28,7 +28,9 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
     if profile['level'] >= 2:
         available_difficulties.append("보통")
     if profile['level'] >= 3:
-        available_difficulties.append("advanced")
+        available_difficulties.append("어려움")
+    if profile['level'] >= 4:
+        available_difficulties.append("아주 어려움")
     
     col1, col2 = st.columns([1, 2])
     
@@ -52,6 +54,7 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                     st.session_state.user_answers = []
                     st.session_state.last_difficulty = difficulty  # 난이도 저장
                     st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
+                    st.session_state.answer_submitted = False  # 제출 상태 초기화
                     st.rerun()
                 else:
                     st.error("해당 난이도의 문제를 찾을 수 없습니다.")
@@ -74,6 +77,7 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                         st.session_state.user_answers = []
                         st.session_state.last_difficulty = difficulty  # 난이도 저장
                         st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
+                        st.session_state.answer_submitted = False  # 제출 상태 초기화
                         st.rerun()
                         break
                     elif attempt == 4:  # 마지막 시도
@@ -84,6 +88,7 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                             st.session_state.user_answers = []
                             st.session_state.last_difficulty = difficulty
                             st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
+                            st.session_state.answer_submitted = False  # 제출 상태 초기화
                             st.rerun()
                         else:
                             st.error("해당 난이도의 문제를 찾을 수 없습니다.")
@@ -122,7 +127,11 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                 # 2. 단계 정보와 제목 (글씨 크기 맞춤)
                 st.markdown(f"**단계 {current_step + 1}/{len(steps)}: {step.get('title', '문제')}**")
                 
-                # 문제 내용 (text 필드 사용)
+                # 3. step의 question 필드 내용 표시
+                if step.get('question'):
+                    st.markdown(f"**{step['question']}**")
+                
+                # 4. 문제 내용 (text 필드 사용)
                 if step.get('text'):
                     st.markdown(step['text'])
                 elif step.get('content'):
@@ -231,8 +240,8 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
         else:
             st.info("난이도를 선택하고 '문제 받기' 버튼을 클릭하세요.")
         
-        # 디버깅 정보 (맨 아래)
-        if 'current_question' in st.session_state:
+        # 디버깅 정보 (제출 후에만 표시)
+        if 'current_question' in st.session_state and st.session_state.get('answer_submitted', False):
             question = st.session_state.current_question
             st.markdown("---")
             st.markdown("#### 🔍 디버깅 정보")
@@ -280,6 +289,7 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
         st.session_state.ai_response = ai_response
         st.session_state.submission_data = submission_data
         st.session_state.prompt_text = prompt
+        st.session_state.answer_submitted = True  # 제출 상태 설정
         
         # 5. 기존 채점 시스템도 유지
         answer_text = json.dumps(user_answers, ensure_ascii=False)
@@ -288,6 +298,26 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
             question,
             answer_text
         )
+        
+        # 6. AI 응답에서 pass_fail 정보 추출하여 추가 저장
+        if ai_response and not ai_response.get('error'):
+            try:
+                # AI 응답에서 pass_fail 추출
+                pass_fail = ai_response.get('pass_fail', 'PASS' if result.get('passed', False) else 'FAIL')
+                
+                # user_answers 테이블에 pass_fail 정보 추가 저장
+                db = GameDatabase()
+                db.save_user_answer(
+                    user_id=user_id,
+                    question_id=question['id'],
+                    user_answer=answer_text,
+                    score=result.get('score', 0),
+                    time_taken=result.get('time_taken', 0),
+                    tokens_used=result.get('tokens_used', 0),
+                    pass_fail=pass_fail
+                )
+            except Exception as e:
+                st.warning(f"AI 응답 정보 저장 중 오류: {str(e)}")
         
         if result.get('success', True):
             st.success("✅ 답안이 제출되었습니다!")
@@ -308,9 +338,8 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
                 st.balloons()
                 st.success(f"🎊 레벨업! 새로운 레벨: {result.get('new_level')}")
             
-            # 세션 정리
-            if 'current_question' in st.session_state:
-                del st.session_state.current_question
+            # 세션 정리하지 않고 결과 화면 유지
+            # 문제 정보는 유지하되, 단계와 답안만 초기화
             if 'current_step' in st.session_state:
                 del st.session_state.current_step
             if 'user_answers' in st.session_state:
@@ -330,27 +359,41 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
                     
                     # 최대 5번 시도해서 다른 문제 찾기
                     for attempt in range(5):
-                        question = db.get_random_question(difficulty=difficulty)
+                        new_question = db.get_random_question(difficulty=difficulty)
                         
-                        if question and question.get('id') != current_question_id:
-                            st.session_state.current_question = question
+                        if new_question and new_question.get('id') != current_question_id:
+                            st.session_state.current_question = new_question
                             st.session_state.current_step = 0
                             st.session_state.user_answers = []
                             st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
+                            st.session_state.answer_submitted = False  # 제출 상태 초기화
+                            # 결과 화면 관련 세션 정리
+                            if 'submission_data' in st.session_state:
+                                del st.session_state.submission_data
+                            if 'prompt_text' in st.session_state:
+                                del st.session_state.prompt_text
+                            if 'ai_response' in st.session_state:
+                                del st.session_state.ai_response
                             st.rerun()
                             break
                         elif attempt == 4:  # 마지막 시도
                             st.warning("다른 문제를 찾을 수 없습니다. 같은 문제가 표시됩니다.")
-                            if question:
-                                st.session_state.current_question = question
+                            if new_question:
+                                st.session_state.current_question = new_question
                                 st.session_state.current_step = 0
                                 st.session_state.user_answers = []
                                 st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
+                                st.session_state.answer_submitted = False  # 제출 상태 초기화
+                                # 결과 화면 관련 세션 정리
+                                if 'submission_data' in st.session_state:
+                                    del st.session_state.submission_data
+                                if 'prompt_text' in st.session_state:
+                                    del st.session_state.prompt_text
+                                if 'ai_response' in st.session_state:
+                                    del st.session_state.ai_response
                                 st.rerun()
                             else:
                                 st.error("해당 난이도의 문제를 찾을 수 없습니다.")
-            
-            st.rerun()
         else:
             st.error(f"❌ 제출 실패: {result.get('message', '알 수 없는 오류')}")
             
@@ -361,10 +404,19 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
 def create_submission_json(question: Dict, user_answers: list) -> Dict:
     """문제와 답안을 JSON 구조로 변환"""
     try:
+        # question이 딕셔너리가 아닌 경우 처리
+        if not isinstance(question, dict):
+            st.error(f"❌ question이 딕셔너리가 아닙니다. 타입: {type(question)}")
+            return {}
+        
         # steps에서 문제 정보 추출
         steps = question.get('steps', [])
         if isinstance(steps, str):
-            steps = json.loads(steps)
+            try:
+                steps = json.loads(steps)
+            except json.JSONDecodeError as e:
+                st.error(f"❌ steps JSON 파싱 오류: {str(e)}")
+                return {}
         
         # answer_key, weights_map, feedback_map 생성
         answer_key = []
@@ -470,7 +522,7 @@ def call_ai_with_prompt(system_prompt: str, submission_data: Dict) -> Dict:
         try:
             # JSON 파싱 시도
             ai_response = json.loads(content)
-        except:
+        except Exception as parse_error:
             # JSON 파싱 실패 시 텍스트로 반환
             ai_response = {"response": content, "parsed": False}
         

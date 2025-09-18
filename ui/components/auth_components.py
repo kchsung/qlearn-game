@@ -153,7 +153,14 @@ def render_user_sidebar(profile: dict, on_logout: Callable[[], None]):
         if profile.get('achievements'):
             st.markdown("### 🏆 업적")
             for ach in profile['achievements']:
-                st.markdown(f"{ach[3]} **{ach[1]}**")
+                if isinstance(ach, dict):
+                    st.markdown(f"{ach.get('icon', '🏆')} **{ach.get('name', '업적')}**")
+                else:
+                    # 리스트 형태인 경우 (하위 호환성)
+                    if len(ach) > 3:
+                        st.markdown(f"{ach[3]} **{ach[1]}**")
+                    else:
+                        st.markdown(f"🏆 **{ach[1] if len(ach) > 1 else '업적'}**")
         
         # 로그아웃
         if st.button("로그아웃"):

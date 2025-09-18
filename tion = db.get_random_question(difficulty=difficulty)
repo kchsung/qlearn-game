@@ -1,0 +1,34 @@
+[33mcommit cf5bd1472fe776c7b3970462d35d4180372abb57[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m
+Author: kchsung <kichan.sung@gmail.com>
+Date:   Wed Sep 17 23:57:26 2025 +0900
+
+    feat: Complete Supabase DB migration
+    
+    - Migrate from SQLite to Supabase PostgreSQL database
+    - Add environment variable validation with clear setup instructions
+    - Fix LEVEL_REQUIREMENTS list structure compatibility issues
+    - Update all database operations to use Supabase API
+    - Add user_answers and user_achievements tables support
+    - Implement level icons and names from database
+    - Update all UI components to handle missing fields gracefully
+    - Remove all SQLite dependencies and local DB file references
+    - Add comprehensive error handling for database operations
+    - Update README with Supabase setup instructions and SQL schema
+    
+    Breaking changes:
+    - Requires Supabase database setup with provided SQL schema
+    - Environment variables must be configured in .env file
+    - Local SQLite database no longer used
+
+ README.md                        |  73 [32m+++++[m[31m-[m
+ main.py                          |   6 [32m+[m
+ src/app.py                       |  65 [32m+++[m[31m---[m
+ src/auth/authentication.py       |  52 [32m++[m[31m---[m
+ src/core/config.py               |  31 [32m++[m[31m-[m
+ src/core/database.py             | 480 [32m++++++++++++++++++++++++[m[31m---------------[m
+ src/services/game_engine.py      | 462 [32m++++++++++++++++++++[m[31m-----------------[m
+ ui/components/auth_components.py |  30 [32m++[m[31m-[m
+ ui/pages/leaderboard_page.py     |  93 [32m++++[m[31m----[m
+ ui/pages/promotion_page.py       | 275 [32m++++++++++[m[31m------------[m
+ ui/pages/stats_page.py           | 223 [32m+++++++++[m[31m---------[m
+ 11 files changed, 1013 insertions(+), 777 deletions(-)
