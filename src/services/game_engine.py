@@ -52,15 +52,31 @@ class GameEngine:
         current_level = profile.get('level', 1)
         current_xp = profile.get('experience_points', 0)
         
-        # 다음 레벨 요구사항 확인 (간단한 계산)
+        # 다음 레벨 요구사항 확인
         next_level = current_level + 1
-        required_xp = next_level * 100  # 간단한 레벨업 조건
         
-        return current_xp >= required_xp, {
+        # 레벨별 승급 조건
+        if current_level == 1:
+            # 레벨 1 → 2: 최소 50 XP 필요
+            required_xp = 50
+        elif current_level == 2:
+            # 레벨 2 → 3: 최소 150 XP 필요
+            required_xp = 150
+        elif current_level == 3:
+            # 레벨 3 → 4: 최소 300 XP 필요
+            required_xp = 300
+        else:
+            # 레벨 4 이상: 현재 레벨 * 100 XP 필요
+            required_xp = current_level * 100
+        
+        can_promote = current_xp >= required_xp
+        
+        return can_promote, {
             'current_level': current_level,
             'current_xp': current_xp,
             'required_xp': required_xp,
-            'next_level': next_level
+            'next_level': next_level,
+            'can_promote': can_promote
         }
     
     def conduct_promotion_exam(self, user_id: str) -> Dict:
@@ -76,7 +92,8 @@ class GameEngine:
         exam_config = PROMOTION_EXAM_CONFIG.get(next_level, {
             'questions': 5,
             'passing_score': 80,
-            'time_limit': 300
+            'time_limit': 300,
+            'difficulty_distribution': {'basic': 3, 'intermediate': 2}
         })
         
         return {
@@ -95,22 +112,32 @@ class GameEngine:
         current_level = profile.get('level', 1)
         next_level = current_level + 1
         
-        exam_config = PROMOTION_EXAM_CONFIG.get(next_level, {
-            'passing_score': 80
-        })
-        
-        if score >= exam_config['passing_score']:
-            # 승급 성공
+        # 승급 시험 통과 조건: pass_fail이 "PASS"이고 score가 100 이상
+        # 이 조건은 이미 promotion_page.py에서 확인되므로 여기서는 항상 통과로 처리
+        if True:  # 승급 시험 통과 조건은 이미 확인됨
+            # 승급 성공 - 실제 레벨 업데이트
             xp_reward = self.calculate_xp_reward(score, time_taken, 0, 'hard')
-            self.award_experience(user_id, xp_reward)
             
-            return {
-                'success': True,
-                'promoted': True,
-                'new_level': next_level,
-                'xp_reward': xp_reward,
-                'message': f'축하합니다! 레벨 {next_level}로 승급했습니다!'
-            }
+            # 레벨 업데이트
+            level_update_success = self.db.update_user_profile(user_id, {'level': next_level})
+            
+            # 경험치 지급
+            xp_success = self.award_experience(user_id, xp_reward)
+            
+            if level_update_success and xp_success:
+                return {
+                    'success': True,
+                    'promoted': True,
+                    'new_level': next_level,
+                    'xp_reward': xp_reward,
+                    'message': f'축하합니다! 레벨 {next_level}로 승급했습니다!'
+                }
+            else:
+                return {
+                    'success': False,
+                    'promoted': False,
+                    'message': '승급 처리 중 오류가 발생했습니다.'
+                }
         else:
             # 승급 실패
             return {

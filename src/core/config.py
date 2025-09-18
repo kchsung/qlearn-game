@@ -102,10 +102,30 @@ GRADING_CRITERIA = {
 
 # 승급 시험 설정
 PROMOTION_EXAM_CONFIG = {
-    2: {"basic": 3, "intermediate": 2},
-    3: {"basic": 2, "intermediate": 3, "advanced": 1},
-    4: {"intermediate": 3, "advanced": 3},
-    5: {"intermediate": 2, "advanced": 4, "previous_levels": True}
+    2: {
+        "questions": 5,
+        "passing_score": 80,
+        "time_limit": 300,
+        "difficulty_distribution": {"basic": 3, "intermediate": 2}
+    },
+    3: {
+        "questions": 6,
+        "passing_score": 80,
+        "time_limit": 360,
+        "difficulty_distribution": {"basic": 2, "intermediate": 3, "advanced": 1}
+    },
+    4: {
+        "questions": 7,
+        "passing_score": 85,
+        "time_limit": 420,
+        "difficulty_distribution": {"intermediate": 3, "advanced": 4}
+    },
+    5: {
+        "questions": 8,
+        "passing_score": 85,
+        "time_limit": 480,
+        "difficulty_distribution": {"intermediate": 2, "advanced": 6}
+    }
 }
 
 # 난이도 설정

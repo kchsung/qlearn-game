@@ -12,6 +12,14 @@ from src.core.database import GameDatabase
 def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
     """도전하기 탭 렌더링"""
     
+    # 세션 상태 초기화
+    if 'current_step' not in st.session_state:
+        st.session_state.current_step = 0
+    if 'user_answers' not in st.session_state:
+        st.session_state.user_answers = []
+    if 'answer_submitted' not in st.session_state:
+        st.session_state.answer_submitted = False
+    
     # 난이도 5단계 정의 (DB의 difficulty 필드와 매칭)
     difficulties = {
         "아주 쉬움": "아주 쉬움",
@@ -44,9 +52,18 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
         
         with col_btn1:
             if st.button("🎲 문제 받기", type="primary", use_container_width=True):
-                # DB에서 문제 가져오기
+                # DB에서 문제 가져오기 (PASS한 문제 제외)
                 db = GameDatabase()
-                question = db.get_random_question(difficulty=difficulty)
+                user_id = st.session_state.get('user_id')
+                
+                # 사용자가 PASS한 문제 ID 목록 조회
+                passed_question_ids = []
+                if user_id:
+                    passed_question_ids = db.get_passed_question_ids(user_id)
+                    if passed_question_ids:
+                        st.info(f"🚫 이미 PASS한 문제 {len(passed_question_ids)}개를 제외합니다.")
+                
+                question = db.get_random_question(difficulty=difficulty, exclude_question_ids=passed_question_ids)
                 
                 if question:
                     st.session_state.current_question = question
@@ -57,19 +74,36 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                     st.session_state.answer_submitted = False  # 제출 상태 초기화
                     st.rerun()
                 else:
-                    st.error("해당 난이도의 문제를 찾을 수 없습니다.")
+                    if passed_question_ids:
+                        st.warning("해당 난이도의 모든 문제를 이미 통과했습니다! 다른 난이도를 시도해보세요.")
+                    else:
+                        st.error("해당 난이도의 문제를 찾을 수 없습니다.")
         
         with col_btn2:
             if st.button("🔄 다른 문제", use_container_width=True):
-                # 다른 문제 가져오기 (현재 문제와 다른 문제)
+                # 다른 문제 가져오기 (현재 문제와 PASS한 문제 제외)
                 db = GameDatabase()
+                user_id = st.session_state.get('user_id')
                 current_question_id = None
                 if 'current_question' in st.session_state:
                     current_question_id = st.session_state.current_question.get('id')
                 
+                # 사용자가 PASS한 문제 ID 목록 조회
+                passed_question_ids = []
+                if user_id:
+                    passed_question_ids = db.get_passed_question_ids(user_id)
+                
+                # 현재 문제도 제외 목록에 추가
+                exclude_ids = passed_question_ids.copy()
+                if current_question_id:
+                    exclude_ids.append(current_question_id)
+                
+                if exclude_ids:
+                    st.info(f"🚫 이미 PASS한 문제와 현재 문제를 제외합니다. (총 {len(exclude_ids)}개)")
+                
                 # 최대 5번 시도해서 다른 문제 찾기
                 for attempt in range(5):
-                    question = db.get_random_question(difficulty=difficulty)
+                    question = db.get_random_question(difficulty=difficulty, exclude_question_ids=exclude_ids)
                     
                     if question and question.get('id') != current_question_id:
                         st.session_state.current_question = question
@@ -81,7 +115,10 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                         st.rerun()
                         break
                     elif attempt == 4:  # 마지막 시도
-                        st.warning("다른 문제를 찾을 수 없습니다. 같은 문제가 표시됩니다.")
+                        if exclude_ids:
+                            st.warning("해당 난이도에서 새로운 문제를 찾을 수 없습니다. 모든 문제를 이미 통과했거나 현재 문제만 남았습니다.")
+                        else:
+                            st.warning("다른 문제를 찾을 수 없습니다. 같은 문제가 표시됩니다.")
                         if question:
                             st.session_state.current_question = question
                             st.session_state.current_step = 0
@@ -352,16 +389,30 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
             col1, col2, col3 = st.columns([1, 1, 1])
             with col2:
                 if st.button("🔄 다른 문제 받기", type="primary", use_container_width=True):
-                    # 현재 난이도 유지하면서 새 문제 받기
+                    # 현재 난이도 유지하면서 새 문제 받기 (PASS한 문제 제외)
                     difficulty = st.session_state.get('last_difficulty', '보통')
                     db = GameDatabase()
+                    user_id = st.session_state.get('user_id')
                     current_question_id = None
                     if 'current_question' in st.session_state:
                         current_question_id = st.session_state.current_question.get('id')
                     
+                    # 사용자가 PASS한 문제 ID 목록 조회
+                    passed_question_ids = []
+                    if user_id:
+                        passed_question_ids = db.get_passed_question_ids(user_id)
+                    
+                    # 현재 문제도 제외 목록에 추가
+                    exclude_ids = passed_question_ids.copy()
+                    if current_question_id:
+                        exclude_ids.append(current_question_id)
+                    
+                    if exclude_ids:
+                        st.info(f"🚫 이미 PASS한 문제와 현재 문제를 제외합니다. (총 {len(exclude_ids)}개)")
+                    
                     # 최대 5번 시도해서 다른 문제 찾기
                     for attempt in range(5):
-                        new_question = db.get_random_question(difficulty=difficulty)
+                        new_question = db.get_random_question(difficulty=difficulty, exclude_question_ids=exclude_ids)
                         
                         if new_question and new_question.get('id') != current_question_id:
                             st.session_state.current_question = new_question
@@ -379,7 +430,10 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
                             st.rerun()
                             break
                         elif attempt == 4:  # 마지막 시도
-                            st.warning("다른 문제를 찾을 수 없습니다. 같은 문제가 표시됩니다.")
+                            if exclude_ids:
+                                st.warning("해당 난이도에서 새로운 문제를 찾을 수 없습니다. 모든 문제를 이미 통과했거나 현재 문제만 남았습니다.")
+                            else:
+                                st.warning("다른 문제를 찾을 수 없습니다. 같은 문제가 표시됩니다.")
                             if new_question:
                                 st.session_state.current_question = new_question
                                 st.session_state.current_step = 0
@@ -433,11 +487,20 @@ def create_submission_json(question: Dict, user_answers: list) -> Dict:
                 except:
                     options = []
             
-            # answer_key (정답) - 임시로 첫 번째 옵션을 정답으로 설정
+            # answer_key (정답) - 가중치가 1.0인 옵션을 정답으로 설정
+            correct_answer = 'A'  # 기본값
             if options and len(options) > 0:
-                answer_key.append(options[0].get('id', 'A'))
-            else:
-                answer_key.append('A')
+                for option in options:
+                    if isinstance(option, dict):
+                        weight = option.get('weight', 0.5)
+                        if weight == 1.0:  # 가중치가 1.0인 옵션이 정답
+                            correct_answer = option.get('id', 'A')
+                            break
+                    else:
+                        # 딕셔너리가 아닌 경우 첫 번째 옵션을 정답으로 설정
+                        correct_answer = str(option)[0] if str(option) else 'A'
+                        break
+            answer_key.append(correct_answer)
             
             # weights_map 생성
             weights = {}

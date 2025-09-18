@@ -281,8 +281,8 @@ class GameDatabase:
             st.error(f"프롬프트 조회 오류: {str(e)}")
             return None
     
-    def get_random_question(self, difficulty: str = '보통', area: str = 'ai') -> Optional[Dict[str, Any]]:
-        """랜덤 문제 조회 (multiple_choice 타입만, steps 정보가 있는 문제만)"""
+    def get_random_question(self, difficulty: str = '보통', area: str = 'ai', exclude_question_ids: List[str] = None) -> Optional[Dict[str, Any]]:
+        """랜덤 문제 조회 (multiple_choice 타입만, steps 정보가 있는 문제만, 제외할 문제 ID 목록 적용)"""
         try:
             st.info(f"🔍 문제 조회 중... 난이도: {difficulty}")
             
@@ -298,6 +298,12 @@ class GameDatabase:
                         valid_questions.append(q)
                 
                 st.info(f"📋 steps 정보가 있는 문제 수: {len(valid_questions)}")
+                
+                # 제외할 문제 ID 목록이 있으면 필터링
+                if exclude_question_ids:
+                    original_count = len(valid_questions)
+                    valid_questions = [q for q in valid_questions if q.get('id') not in exclude_question_ids]
+                    st.info(f"🚫 PASS한 문제 제외 후 문제 수: {len(valid_questions)} (제외된 문제: {original_count - len(valid_questions)}개)")
                 
                 if valid_questions:
                     # 랜덤하게 문제 선택
@@ -315,7 +321,10 @@ class GameDatabase:
                     
                     return random_question
                 else:
-                    st.error(f"❌ {difficulty} 난이도에 steps 정보가 있는 문제가 없습니다.")
+                    if exclude_question_ids:
+                        st.warning(f"⚠️ {difficulty} 난이도에서 PASS하지 않은 문제가 없습니다. 모든 문제를 이미 통과했습니다!")
+                    else:
+                        st.error(f"❌ {difficulty} 난이도에 steps 정보가 있는 문제가 없습니다.")
                     return None
             else:
                 st.error(f"❌ {difficulty} 난이도에 multiple_choice 타입 문제가 없습니다.")
@@ -374,4 +383,16 @@ class GameDatabase:
             return result.data or []
         except Exception as e:
             st.error(f"답변 기록 조회 오류: {str(e)}")
+            return []
+    
+    def get_passed_question_ids(self, user_id: str) -> List[str]:
+        """사용자가 PASS한 문제 ID 목록 조회"""
+        try:
+            result = self.supabase.table('user_answers').select('question_id').eq('user_id', user_id).eq('result', 'PASS').execute()
+            
+            if result.data:
+                return [item['question_id'] for item in result.data]
+            return []
+        except Exception as e:
+            st.error(f"PASS한 문제 ID 조회 오류: {str(e)}")
             return []
