@@ -24,7 +24,7 @@ class AIAssessmentGame:
         self.user_manager = UserManager(self.db)
         self.auth_manager = AuthenticationManager()
     
-    def submit_answer(self, user_id: str, question: Dict, answer: str) -> Dict:
+    def submit_answer(self, user_id: str, question: Dict, answer: str, pass_fail: str = None) -> Dict:
         """답변 제출 및 처리 (Supabase 기반)"""
         # 자동 채점
         grade_result = self.grader.grade_answer(question, answer, question['difficulty'])
@@ -44,7 +44,8 @@ class AIAssessmentGame:
             user_answer=answer,
             score=grade_result['total_score'],
             time_taken=grade_result['time_taken'],
-            tokens_used=grade_result['tokens_used']
+            tokens_used=grade_result['tokens_used'],
+            pass_fail=pass_fail
         )
         
         if not success:
@@ -158,9 +159,9 @@ class AIAssessmentGame:
         from ui.pages.challenge_page import render_challenge_tab
         render_challenge_tab(profile, self._submit_answer_wrapper)
     
-    def _submit_answer_wrapper(self, user_id: str, question: Dict, answer: str) -> Dict:
+    def _submit_answer_wrapper(self, user_id: str, question: Dict, answer: str, pass_fail: str = None) -> Dict:
         """답변 제출 래퍼"""
-        return self.submit_answer(user_id, question, answer)
+        return self.submit_answer(user_id, question, answer, pass_fail)
     
     def render_sidebar(self):
         """사이드바 렌더링"""

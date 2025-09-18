@@ -291,33 +291,35 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
         st.session_state.prompt_text = prompt
         st.session_state.answer_submitted = True  # 제출 상태 설정
         
-        # 5. 기존 채점 시스템도 유지
+        # 5. AI 응답에서 pass_fail 정보 추출
+        pass_fail = None
+        if ai_response and not ai_response.get('error'):
+            try:
+                # AI 응답에서 pass_fail 추출
+                ai_pass_fail = ai_response.get('pass_fail')
+                if ai_pass_fail:
+                    pass_fail = ai_pass_fail
+                    st.info(f"🤖 AI 응답에서 pass_fail 추출: {pass_fail}")
+                else:
+                    st.info("🤖 AI 응답에 pass_fail 정보가 없습니다.")
+            except Exception as e:
+                st.warning(f"AI 응답 정보 처리 중 오류: {str(e)}")
+        
+        # 6. 기존 채점 시스템 호출 (pass_fail 정보 포함)
         answer_text = json.dumps(user_answers, ensure_ascii=False)
         result = on_submit_answer(
             user_id,
             question,
-            answer_text
+            answer_text,
+            pass_fail  # pass_fail 정보 전달
         )
         
-        # 6. AI 응답에서 pass_fail 정보 추출하여 추가 저장
-        if ai_response and not ai_response.get('error'):
-            try:
-                # AI 응답에서 pass_fail 추출
-                pass_fail = ai_response.get('pass_fail', 'PASS' if result.get('passed', False) else 'FAIL')
-                
-                # user_answers 테이블에 pass_fail 정보 추가 저장
-                db = GameDatabase()
-                db.save_user_answer(
-                    user_id=user_id,
-                    question_id=question['id'],
-                    user_answer=answer_text,
-                    score=result.get('score', 0),
-                    time_taken=result.get('time_taken', 0),
-                    tokens_used=result.get('tokens_used', 0),
-                    pass_fail=pass_fail
-                )
-            except Exception as e:
-                st.warning(f"AI 응답 정보 저장 중 오류: {str(e)}")
+        # 7. pass_fail 정보가 없으면 기본 채점 결과 사용
+        if pass_fail is None:
+            pass_fail = 'PASS' if result.get('passed', False) else 'FAIL'
+            st.info(f"📊 기본 채점 결과로 pass_fail 설정: {pass_fail}")
+        
+        st.success(f"✅ 답안 제출 완료 - pass_fail: {pass_fail}")
         
         if result.get('success', True):
             st.success("✅ 답안이 제출되었습니다!")

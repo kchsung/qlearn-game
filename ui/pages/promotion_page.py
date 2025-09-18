@@ -144,7 +144,9 @@ def render_promotion_exam(profile: Dict, game_engine, db, user_id: str):
         with col3:
             progress = (current_xp / required_xp) * 100 if required_xp > 0 else 0
             st.metric("진행률", f"{progress:.1f}%")
-            st.progress(progress / 100)
+            # 진행률을 0.0과 1.0 사이로 제한
+            progress_value = min(1.0, max(0.0, progress / 100))
+            st.progress(progress_value)
         
         # 부족한 조건 표시
         if current_xp < required_xp:

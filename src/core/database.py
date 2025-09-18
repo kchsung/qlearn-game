@@ -337,10 +337,16 @@ class GameDatabase:
                 'tokens_used': tokens_used
             }
             
-            # result 필드에 pass_fail 값 저장 (enum 값 확인 필요)
-            # TODO: q_result enum에 정의된 값으로 변경 필요
-            # if pass_fail is not None:
-            #     data['result'] = pass_fail
+            # result 필드에 pass_fail 값 저장 (enum 값으로 변환)
+            if pass_fail is not None:
+                # pass_fail 값을 적절한 enum 값으로 변환
+                if pass_fail.upper() in ['PASS', 'PASSED', 'TRUE', '1']:
+                    data['result'] = 'PASS'
+                elif pass_fail.upper() in ['FAIL', 'FAILED', 'FALSE', '0']:
+                    data['result'] = 'FAIL'
+                else:
+                    # 기본값으로 PASS 설정
+                    data['result'] = 'PASS'
             
             result = self.supabase.table('user_answers').insert(data).execute()
             

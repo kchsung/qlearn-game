@@ -44,7 +44,9 @@ def render_user_stats(db, user_id: str):
             
             with progress_col1:
                 progress = level_progress.get('progress_percentage', 0)
-                st.progress(progress / 100)
+                # 진행률을 0.0과 1.0 사이로 제한
+                progress_value = min(1.0, max(0.0, progress / 100))
+                st.progress(progress_value)
                 st.caption(f"현재 레벨 {level_progress.get('current_level', 1)}에서의 진행률")
             
             with progress_col2:

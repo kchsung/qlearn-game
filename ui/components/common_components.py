@@ -42,7 +42,9 @@ def render_user_sidebar(profile: Dict, on_logout):
         
         # 경험치 바
         xp_progress = (profile['xp'] / profile['next_level_xp']) * 100
-        st.progress(xp_progress / 100)
+        # 진행률을 0.0과 1.0 사이로 제한
+        progress_value = min(1.0, max(0.0, xp_progress / 100))
+        st.progress(progress_value)
         st.caption(f"XP: {profile['xp']} / {profile['next_level_xp']}")
         
         # 통계
