@@ -282,31 +282,43 @@ class GameDatabase:
             return None
     
     def get_random_question(self, difficulty: str = '보통', area: str = 'ai') -> Optional[Dict[str, Any]]:
-        """랜덤 문제 조회 (다양한 문제를 위해 랜덤 선택)"""
+        """랜덤 문제 조회 (multiple_choice 타입만, steps 정보가 있는 문제만)"""
         try:
             st.info(f"🔍 문제 조회 중... 난이도: {difficulty}")
             
-            # 먼저 해당 난이도의 모든 문제 확인
-            all_questions = self.supabase.table('questions').select('*').eq('difficulty', difficulty).execute()
-            st.info(f"📊 {difficulty} 난이도 전체 문제 수: {len(all_questions.data) if all_questions.data else 0}")
+            # multiple_choice 타입이고 steps 정보가 있는 문제만 조회
+            all_questions = self.supabase.table('questions').select('*').eq('difficulty', difficulty).eq('type', 'multiple_choice').execute()
+            st.info(f"📊 {difficulty} 난이도 multiple_choice 문제 수: {len(all_questions.data) if all_questions.data else 0}")
             
             if all_questions.data:
-                # 랜덤하게 문제 선택 (다양한 문제를 위해)
-                import random
-                random_question = random.choice(all_questions.data)
-                st.success(f"✅ 랜덤 문제 선택: {random_question.get('id', 'N/A')}")
+                # steps 정보가 있는 문제만 필터링
+                valid_questions = []
+                for q in all_questions.data:
+                    if q.get('steps') and q['steps'].strip():  # steps가 있고 비어있지 않은 경우
+                        valid_questions.append(q)
                 
-                # steps 필드가 있는지 확인하고 파싱
-                if random_question.get('steps'):
-                    try:
-                        if isinstance(random_question['steps'], str):
-                            random_question['steps'] = json.loads(random_question['steps'])
-                    except:
-                        st.warning("⚠️ steps 필드 파싱 실패")
+                st.info(f"📋 steps 정보가 있는 문제 수: {len(valid_questions)}")
                 
-                return random_question
+                if valid_questions:
+                    # 랜덤하게 문제 선택
+                    import random
+                    random_question = random.choice(valid_questions)
+                    st.success(f"✅ 랜덤 문제 선택: {random_question.get('id', 'N/A')}")
+                    
+                    # steps 필드 파싱
+                    if random_question.get('steps'):
+                        try:
+                            if isinstance(random_question['steps'], str):
+                                random_question['steps'] = json.loads(random_question['steps'])
+                        except:
+                            st.warning("⚠️ steps 필드 파싱 실패")
+                    
+                    return random_question
+                else:
+                    st.error(f"❌ {difficulty} 난이도에 steps 정보가 있는 문제가 없습니다.")
+                    return None
             else:
-                st.error(f"❌ {difficulty} 난이도에 문제가 없습니다.")
+                st.error(f"❌ {difficulty} 난이도에 multiple_choice 타입 문제가 없습니다.")
                 return None
                 
         except Exception as e:
