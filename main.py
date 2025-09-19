@@ -112,7 +112,124 @@ h1, h2, h3, h4, h5, h6 {
 .stTabs > div > div > div > button {
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif !important;
 }
+
+/* 모든 툴팁 완전 제거 */
+*[title] {
+    title: none !important;
+}
+
+*[title]:hover::after {
+    display: none !important;
+}
+
+*[title]:hover::before {
+    display: none !important;
+}
+
+/* Streamlit 개발 모드 툴팁 숨기기 */
+[data-testid="stTooltip"] {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* 위젯 key 툴팁 숨기기 */
+.stTooltip {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* 개발 모드 디버깅 정보 숨기기 */
+[title*="key"] {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* 모든 title 속성 제거 */
+* {
+    title: none !important;
+}
+
+/* 사이드바 영역의 모든 툴팁 숨기기 */
+.css-1d391kg *[title] {
+    title: none !important;
+}
+
+/* 브라우저 기본 툴팁 완전 차단 */
+*[title]:hover {
+    pointer-events: none;
+}
+
+*[title]:hover * {
+    pointer-events: auto;
+}
+
+/* Streamlit 사이드바 컨테이너 */
+.css-1d391kg {
+    position: relative;
+}
+
+/* 사이드바 전체에 오버레이 */
+.css-1d391kg::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    pointer-events: none;
+    background: transparent;
+}
 </style>
+
+<script>
+// 모든 title 속성을 제거하는 JavaScript
+document.addEventListener('DOMContentLoaded', function() {
+    // 모든 요소의 title 속성 제거
+    function removeAllTitles() {
+        const allElements = document.querySelectorAll('*');
+        allElements.forEach(element => {
+            if (element.hasAttribute('title')) {
+                element.removeAttribute('title');
+            }
+        });
+    }
+    
+    // 초기 실행
+    removeAllTitles();
+    
+    // DOM 변경 감지하여 지속적으로 제거
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList') {
+                mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1) { // Element node
+                        if (node.hasAttribute('title')) {
+                            node.removeAttribute('title');
+                        }
+                        // 자식 요소들도 확인
+                        const childElements = node.querySelectorAll('*');
+                        childElements.forEach(child => {
+                            if (child.hasAttribute('title')) {
+                                child.removeAttribute('title');
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    });
+    
+    // 전체 문서 감시
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+    
+    // 주기적으로 title 속성 제거 (추가 보장)
+    setInterval(removeAllTitles, 1000);
+});
+</script>
 """, unsafe_allow_html=True)
 
 def main():

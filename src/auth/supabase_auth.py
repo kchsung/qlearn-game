@@ -39,8 +39,6 @@ class SupabaseAuth:
             return ""
         
         try:
-            st.info("🔄 Google OAuth URL 생성 중...")
-            
             # 가장 간단한 형태로 OAuth URL 생성
             res = self.supabase.auth.sign_in_with_oauth({
                 "provider": "google",
@@ -57,7 +55,6 @@ class SupabaseAuth:
             else:
                 url = str(res)
             
-            st.info(f"🔗 Google OAuth URL 생성 완료")
             return url
             
         except Exception as e:
@@ -70,24 +67,18 @@ class SupabaseAuth:
             return None
 
         qp = st.query_params
-        st.info(f"🔍 콜백 파라미터: {dict(qp)}")
         
         if "code" not in qp:
-            st.info("ℹ️ code 파라미터 없음")
             return None
 
         code = qp["code"]
-        st.info(f"✅ 인증 코드 받음: {code[:20]}...")
         
         try:
             # 올바른 형태로 세션 교환 시도 (딕셔너리 형태)
-            st.info("🔄 세션 교환 시도 중...")
             resp = self.supabase.auth.exchange_code_for_session({"auth_code": code})
-            st.info("✅ 세션 교환 성공!")
             
         except Exception as e:
-            st.error(f"❌ 세션 교환 실패: {e}")
-            st.info("🔄 다른 방법으로 시도 중...")
+            # 다른 방법으로 시도 중...
             
             # 다른 방법: 직접 REST API 호출 (PKCE grant_type 사용)
             try:
@@ -104,12 +95,9 @@ class SupabaseAuth:
                 }
                 
                 response = requests.post(token_url, headers=headers, json=data)
-                st.info(f"🔍 REST API 응답: {response.status_code}")
-                st.info(f"🔍 REST API 응답 내용: {response.text}")
                 
                 if response.status_code == 200:
                     token_data = response.json()
-                    st.info("✅ REST API 토큰 교환 성공!")
                     
                     # 사용자 데이터 구성
                     user_data = {
@@ -122,21 +110,14 @@ class SupabaseAuth:
                     
                     self.set_user_session(user_data)
                     st.query_params.clear()
-                    st.success("✅ OAuth 인증 완료!")
                     return user_data
                 else:
-                    st.error(f"❌ REST API 실패: {response.text}")
-                    
                     # 마지막 시도: authorization_code grant_type
-                    st.info("🔄 authorization_code grant_type으로 재시도...")
                     token_url2 = f"{self.supabase_url}/auth/v1/token?grant_type=authorization_code"
                     response2 = requests.post(token_url2, headers=headers, json=data)
-                    st.info(f"🔍 재시도 응답: {response2.status_code}")
-                    st.info(f"🔍 재시도 내용: {response2.text}")
                     
                     if response2.status_code == 200:
                         token_data = response2.json()
-                        st.info("✅ 재시도 성공!")
                         
                         user_data = {
                             "user_id": token_data.get("user", {}).get("id", ""),
@@ -148,14 +129,11 @@ class SupabaseAuth:
                         
                         self.set_user_session(user_data)
                         st.query_params.clear()
-                        st.success("✅ OAuth 인증 완료!")
                         return user_data
                     else:
-                        st.error(f"❌ 재시도도 실패: {response2.text}")
                         return None
                     
             except Exception as e2:
-                st.error(f"❌ REST API 방식도 실패: {e2}")
                 return None
 
         # SDK 방식이 성공한 경우

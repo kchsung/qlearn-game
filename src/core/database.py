@@ -284,11 +284,8 @@ class GameDatabase:
     def get_random_question(self, difficulty: str = '보통', area: str = 'ai', exclude_question_ids: List[str] = None) -> Optional[Dict[str, Any]]:
         """랜덤 문제 조회 (multiple_choice 타입만, steps 정보가 있는 문제만, 제외할 문제 ID 목록 적용)"""
         try:
-            st.info(f"🔍 문제 조회 중... 난이도: {difficulty}")
-            
             # multiple_choice 타입이고 steps 정보가 있는 문제만 조회
             all_questions = self.supabase.table('questions').select('*').eq('difficulty', difficulty).eq('type', 'multiple_choice').execute()
-            st.info(f"📊 {difficulty} 난이도 multiple_choice 문제 수: {len(all_questions.data) if all_questions.data else 0}")
             
             if all_questions.data:
                 # steps 정보가 있는 문제만 필터링
@@ -297,19 +294,14 @@ class GameDatabase:
                     if q.get('steps') and q['steps'].strip():  # steps가 있고 비어있지 않은 경우
                         valid_questions.append(q)
                 
-                st.info(f"📋 steps 정보가 있는 문제 수: {len(valid_questions)}")
-                
                 # 제외할 문제 ID 목록이 있으면 필터링
                 if exclude_question_ids:
-                    original_count = len(valid_questions)
                     valid_questions = [q for q in valid_questions if q.get('id') not in exclude_question_ids]
-                    st.info(f"🚫 PASS한 문제 제외 후 문제 수: {len(valid_questions)} (제외된 문제: {original_count - len(valid_questions)}개)")
                 
                 if valid_questions:
                     # 랜덤하게 문제 선택
                     import random
                     random_question = random.choice(valid_questions)
-                    st.success(f"✅ 랜덤 문제 선택: {random_question.get('id', 'N/A')}")
                     
                     # steps 필드 파싱
                     if random_question.get('steps'):
@@ -317,21 +309,15 @@ class GameDatabase:
                             if isinstance(random_question['steps'], str):
                                 random_question['steps'] = json.loads(random_question['steps'])
                         except:
-                            st.warning("⚠️ steps 필드 파싱 실패")
+                            pass  # 파싱 실패해도 계속 진행
                     
                     return random_question
                 else:
-                    if exclude_question_ids:
-                        st.warning(f"⚠️ {difficulty} 난이도에서 PASS하지 않은 문제가 없습니다. 모든 문제를 이미 통과했습니다!")
-                    else:
-                        st.error(f"❌ {difficulty} 난이도에 steps 정보가 있는 문제가 없습니다.")
                     return None
             else:
-                st.error(f"❌ {difficulty} 난이도에 multiple_choice 타입 문제가 없습니다.")
                 return None
                 
         except Exception as e:
-            st.error(f"문제 조회 오류: {str(e)}")
             return None
     
     def save_user_answer(self, user_id: str, question_id: str, user_answer: str, score: float, time_taken: int, tokens_used: int, pass_fail: str = None, detail: str = None) -> bool:

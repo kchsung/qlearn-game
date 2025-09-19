@@ -9,8 +9,7 @@ from datetime import datetime
 from typing import Dict, Optional
 
 from src.core.database import GameDatabase
-from src.services.ai_services import AutoGrader, QuestionGenerator
-from src.services.game_engine import GameEngine, UserManager
+from src.services import AutoGrader, QuestionGenerator, GameEngine, UserManager
 from src.auth.authentication import AuthenticationManager
 
 
@@ -191,7 +190,6 @@ class AIAssessmentGame:
         
         # OAuth 콜백 자동 처리 (URL에 code가 있을 때)
         if not self._is_user_authenticated() and 'code' in st.query_params:
-            st.info("🔄 OAuth 콜백을 처리하는 중...")
             self.handle_google_login()
             return  # 콜백 처리 후 리다이렉트되므로 여기서 종료
         

@@ -60,8 +60,6 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                 passed_question_ids = []
                 if user_id:
                     passed_question_ids = db.get_passed_question_ids(user_id)
-                    if passed_question_ids:
-                        st.info(f"🚫 이미 PASS한 문제 {len(passed_question_ids)}개를 제외합니다.")
                 
                 question = db.get_random_question(difficulty=difficulty, exclude_question_ids=passed_question_ids)
                 
@@ -74,10 +72,7 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                     st.session_state.answer_submitted = False  # 제출 상태 초기화
                     st.rerun()
                 else:
-                    if passed_question_ids:
-                        st.warning("해당 난이도의 모든 문제를 이미 통과했습니다! 다른 난이도를 시도해보세요.")
-                    else:
-                        st.error("해당 난이도의 문제를 찾을 수 없습니다.")
+                    pass  # 문제가 없어도 메시지 표시하지 않음
         
         with col_btn2:
             if st.button("🔄 다른 문제", use_container_width=True):
@@ -98,9 +93,6 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                 if current_question_id:
                     exclude_ids.append(current_question_id)
                 
-                if exclude_ids:
-                    st.info(f"🚫 이미 PASS한 문제와 현재 문제를 제외합니다. (총 {len(exclude_ids)}개)")
-                
                 # 최대 5번 시도해서 다른 문제 찾기
                 for attempt in range(5):
                     question = db.get_random_question(difficulty=difficulty, exclude_question_ids=exclude_ids)
@@ -115,10 +107,6 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                         st.rerun()
                         break
                     elif attempt == 4:  # 마지막 시도
-                        if exclude_ids:
-                            st.warning("해당 난이도에서 새로운 문제를 찾을 수 없습니다. 모든 문제를 이미 통과했거나 현재 문제만 남았습니다.")
-                        else:
-                            st.warning("다른 문제를 찾을 수 없습니다. 같은 문제가 표시됩니다.")
                         if question:
                             st.session_state.current_question = question
                             st.session_state.current_step = 0
@@ -127,8 +115,6 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                             st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
                             st.session_state.answer_submitted = False  # 제출 상태 초기화
                             st.rerun()
-                        else:
-                            st.error("해당 난이도의 문제를 찾을 수 없습니다.")
     
     with col2:
         # 현재 문제 표시
@@ -354,13 +340,8 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
         # 7. pass_fail 정보가 없으면 기본 채점 결과 사용
         if pass_fail is None:
             pass_fail = 'PASS' if result.get('passed', False) else 'FAIL'
-            st.info(f"📊 기본 채점 결과로 pass_fail 설정: {pass_fail}")
-        
-        st.success(f"✅ 답안 제출 완료 - pass_fail: {pass_fail}")
         
         if result.get('success', True):
-            st.success("✅ 답안이 제출되었습니다!")
-            
             # 결과 표시
             if result.get('passed'):
                 st.success(f"🎉 통과! 점수: {result.get('score', 0):.1f}점")
@@ -407,9 +388,6 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
                     if current_question_id:
                         exclude_ids.append(current_question_id)
                     
-                    if exclude_ids:
-                        st.info(f"🚫 이미 PASS한 문제와 현재 문제를 제외합니다. (총 {len(exclude_ids)}개)")
-                    
                     # 최대 5번 시도해서 다른 문제 찾기
                     for attempt in range(5):
                         new_question = db.get_random_question(difficulty=difficulty, exclude_question_ids=exclude_ids)
@@ -430,10 +408,6 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
                             st.rerun()
                             break
                         elif attempt == 4:  # 마지막 시도
-                            if exclude_ids:
-                                st.warning("해당 난이도에서 새로운 문제를 찾을 수 없습니다. 모든 문제를 이미 통과했거나 현재 문제만 남았습니다.")
-                            else:
-                                st.warning("다른 문제를 찾을 수 없습니다. 같은 문제가 표시됩니다.")
                             if new_question:
                                 st.session_state.current_question = new_question
                                 st.session_state.current_step = 0
@@ -448,8 +422,6 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
                                 if 'ai_response' in st.session_state:
                                     del st.session_state.ai_response
                                 st.rerun()
-                            else:
-                                st.error("해당 난이도의 문제를 찾을 수 없습니다.")
         else:
             st.error(f"❌ 제출 실패: {result.get('message', '알 수 없는 오류')}")
             

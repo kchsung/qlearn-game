@@ -20,11 +20,9 @@ class AuthenticationManager:
             # URL에 code가 있는지 확인
             if 'code' in st.query_params:
                 # OAuth 콜백 처리
-                st.info("🔄 OAuth 콜백을 처리하는 중...")
                 user_data = self.supabase_auth.handle_oauth_callback()
                 
                 if user_data:
-                    st.info("Google 인증 성공! 사용자 정보를 동기화하는 중...")
                     # Supabase 데이터베이스에 사용자 정보 저장/업데이트
                     user_id = self._sync_user_to_supabase_db(user_data)
                     
@@ -36,11 +34,6 @@ class AuthenticationManager:
                         # 세션 상태 강제 유지
                         st.session_state['login_completed'] = True
                         st.session_state['user_email'] = user_data.get('email', '')
-                        
-                        # 디버깅 정보
-                        st.info(f"✅ 세션 설정 완료 - user_id: {user_id}")
-                        st.info(f"✅ Supabase 사용자: {user_data.get('email', 'N/A')}")
-                        st.info(f"✅ 세션 상태 확인: {st.session_state.get('user_id')}")
                         
                         st.success("🎉 Google 로그인 성공! 게임을 시작하세요!")
                         st.balloons()
@@ -58,16 +51,13 @@ class AuthenticationManager:
                     st.error("❌ OAuth 콜백 처리 실패")
             else:
                 # Google OAuth URL 생성 및 리다이렉트
-                st.info("🔄 Google OAuth URL 생성 중...")
                 auth_url = self.supabase_auth.get_google_auth_url()
                 if auth_url:
-                    st.info("Google 로그인 페이지로 이동합니다...")
-                    
                     # 더 안정적인 리다이렉트 방법
                     st.markdown(f"""
                     <div style="text-align: center; padding: 20px;">
-                        <h3>🔐 Google 로그인</h3>
-                        <p>Google 계정으로 로그인하려면 아래 버튼을 클릭하세요.</p>
+                        <h3>🔐 Google Login</h3>
+                        <p>Google로 로그인하려면 아래 버튼을 클릭하세요.</p>
                         <a href="{auth_url}" target="_self" style="
                             display: inline-block;
                             background: #4285f4;
@@ -76,8 +66,13 @@ class AuthenticationManager:
                             text-decoration: none;
                             border-radius: 8px;
                             font-weight: bold;
+                            font-size: 16px;
                             margin: 10px;
-                        ">Google로 로그인</a>
+                            white-space: nowrap;
+                            width: 100%;
+                            max-width: 300px;
+                            text-align: center;
+                        ">Google Login</a>
                     </div>
                     """, unsafe_allow_html=True)
                     
@@ -89,8 +84,6 @@ class AuthenticationManager:
                     }}, 2000);
                     </script>
                     """, unsafe_allow_html=True)
-                    
-                    st.info("2초 후 자동으로 Google 로그인 페이지로 이동합니다...")
                 else:
                     st.error("❌ Google 로그인 URL 생성 실패. 설정을 확인해주세요.")
                         
