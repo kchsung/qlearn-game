@@ -385,7 +385,7 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
             
             # 다른 문제 받기 버튼 표시
             st.markdown("---")
-            col1, col2, col3 = st.columns([1, 1, 1])
+            col1, col2, col3 = st.columns([1, 3, 1])
             with col2:
                 if st.button("🔄 다른 문제 받기", type="primary", use_container_width=True):
                     # 현재 난이도 유지하면서 새 문제 받기 (PASS한 문제 제외)
