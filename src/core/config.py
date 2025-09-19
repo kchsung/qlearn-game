@@ -4,20 +4,28 @@ AI Master Quest 설정 및 상수 정의
 """
 
 import os
-from dotenv import load_dotenv
+import streamlit as st
 
-# 환경 변수 로드
-load_dotenv()
-
-# Supabase 설정 (데이터베이스는 Supabase 사용)
+# Streamlit secrets에서 환경변수 로드 (Streamlit Cloud 호환)
+def get_secret(key: str, default: str = None) -> str:
+    """Streamlit secrets에서 환경변수 가져오기"""
+    try:
+        # Streamlit secrets에서 먼저 시도
+        if hasattr(st, 'secrets') and key in st.secrets:
+            return st.secrets[key]
+    except:
+        pass
+    
+    # 환경변수에서 시도
+    return os.getenv(key, default)
 
 # OpenAI 설정
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_API_KEY = get_secret('OPENAI_API_KEY')
 OPENAI_MODEL = "gpt-5"
 
 # Supabase 설정
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')
+SUPABASE_URL = get_secret('SUPABASE_URL')
+SUPABASE_ANON_KEY = get_secret('SUPABASE_ANON_KEY')
 
 # 환경변수 검증
 def validate_environment():

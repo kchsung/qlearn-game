@@ -200,9 +200,9 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                             key=f"step_{current_step}"
                         )
                         
-                        # 선택된 옵션의 피드백 표시
-                        if selected_option in option_feedbacks and option_feedbacks[selected_option]:
-                            st.info(f"💡 **피드백**: {option_feedbacks[selected_option]}")
+                        # 피드백 보기 버튼
+                        if st.button("💡 피드백 보기", key=f"feedback_{current_step}", use_container_width=True):
+                            show_feedback_for_step(step, selected_option)
                     
                     else:
                         # 일반적인 문자열 리스트 처리
@@ -212,17 +212,9 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                             key=f"step_{current_step}"
                         )
                         
-                        # 피드백 표시
-                        if step.get('feedback'):
-                            feedback = step['feedback']
-                            if isinstance(feedback, str):
-                                try:
-                                    feedback = json.loads(feedback)
-                                except:
-                                    feedback = {opt: f"{opt}에 대한 피드백" for opt in options}
-                            
-                            if selected_option in feedback:
-                                st.info(f"💡 **피드백**: {feedback[selected_option]}")
+                        # 피드백 보기 버튼
+                        if st.button("💡 피드백 보기", key=f"feedback_{current_step}", use_container_width=True):
+                            show_feedback_for_step(step, selected_option)
                 
                 # 버튼 영역
                 col_prev, col_next = st.columns(2)
@@ -263,100 +255,126 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
         else:
             st.info("난이도를 선택하고 '문제 받기' 버튼을 클릭하세요.")
         
-        # 디버깅 정보 (제출 후에만 표시)
-        if 'current_question' in st.session_state and st.session_state.get('answer_submitted', False):
-            question = st.session_state.current_question
-            st.markdown("---")
-            st.markdown("#### 🔍 디버깅 정보")
-            st.write("**question.scenario:**", question.get('scenario'))
-            st.write("**steps 구조:**", question.get('steps'))
+
+
+def show_feedback_for_step(step: Dict, selected_option: str):
+    """선택된 옵션에 대한 피드백 표시"""
+    try:
+        options = step.get('options', [])
+        if isinstance(options, str):
+            try:
+                options = json.loads(options)
+            except:
+                return
+        
+        # 딕셔너리 형태의 옵션들에서 피드백 찾기
+        if options and isinstance(options[0], dict):
+            option_feedbacks = {}
+            for option in options:
+                if isinstance(option, dict):
+                    option_text = option.get('text', str(option))
+                    feedback = option.get('feedback', '')
+                    if feedback:
+                        option_feedbacks[option_text] = feedback
             
-            # 프롬프트 입력 데이터 표시
-            if 'submission_data' in st.session_state:
-                st.markdown("#### 📝 프롬프트 Input JSON")
-                st.json(st.session_state.submission_data)
+            if selected_option in option_feedbacks and option_feedbacks[selected_option]:
+                st.info(f"💡 **피드백**: {option_feedbacks[selected_option]}")
+        else:
+            # 일반적인 피드백 처리
+            if step.get('feedback'):
+                feedback = step['feedback']
+                if isinstance(feedback, str):
+                    try:
+                        feedback = json.loads(feedback)
+                    except:
+                        feedback = {opt: f"{opt}에 대한 피드백" for opt in options}
+                
+                if selected_option in feedback:
+                    st.info(f"💡 **피드백**: {feedback[selected_option]}")
+    except Exception as e:
+        pass  # 피드백 표시 실패해도 계속 진행
+
+
+def compare_answers(question: Dict, user_answers: list) -> str:
+    """답안 비교를 통한 PASS/FAIL 판정"""
+    try:
+        # steps에서 정답 추출
+        steps = question.get('steps', [])
+        if isinstance(steps, str):
+            try:
+                steps = json.loads(steps)
+            except:
+                return 'FAIL'
+        
+        if not steps or len(steps) != len(user_answers):
+            return 'FAIL'
+        
+        # 각 단계별로 정답 확인
+        for i, step in enumerate(steps):
+            if i >= len(user_answers):
+                return 'FAIL'
             
-            # 프롬프트 텍스트 표시
-            if 'prompt_text' in st.session_state:
-                st.markdown("#### 📋 System 프롬프트")
-                st.text_area("프롬프트 내용:", st.session_state.prompt_text, height=200, disabled=True)
+            # 정답 옵션 찾기 (weight가 1.0인 옵션)
+            correct_option_id = None
+            options = step.get('options', [])
+            if isinstance(options, str):
+                try:
+                    options = json.loads(options)
+                except:
+                    return 'FAIL'
             
-            # AI 응답 표시
-            if 'ai_response' in st.session_state:
-                st.markdown("#### 🤖 AI 응답")
-                ai_response = st.session_state.ai_response
-                if ai_response.get('error'):
-                    st.error(f"AI 응답 오류: {ai_response['error']}")
-                else:
-                    st.json(ai_response)
+            for option in options:
+                if isinstance(option, dict) and option.get('weight') == 1.0:
+                    correct_option_id = option.get('id')
+                    break
+            
+            if not correct_option_id:
+                return 'FAIL'
+            
+            # 사용자 답안 확인
+            user_answer = user_answers[i]
+            if isinstance(user_answer, dict):
+                selected_id = user_answer.get('selected_option_id')
+            else:
+                selected_id = str(user_answer)[0] if user_answer else None
+            
+            # 정답과 비교
+            if selected_id != correct_option_id:
+                return 'FAIL'
+        
+        return 'PASS'
+        
+    except Exception as e:
+        return 'FAIL'
 
 
 def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callable, user_id: str):
-    """답안 제출 처리"""
+    """답안 제출 처리 - 단순 답안 비교 방식"""
     try:
-        # 1. 답안을 JSON 구조로 변환
-        submission_data = create_submission_json(question, user_answers)
+        # 1. 답안 비교를 통한 PASS/FAIL 판정
+        pass_fail = compare_answers(question, user_answers)
         
-        # 2. Supabase에서 프롬프트 가져오기
+        # 2. 제출 상태 설정
+        st.session_state.answer_submitted = True
+        
+        # 3. 직접 데이터베이스에 저장 (on_submit_answer 호출하지 않음)
         db = GameDatabase()
-        prompt = db.get_prompt_by_id("1afe1512-9a7a-4eee-b316-1734b9c81f3a")
-        
-        if not prompt:
-            st.error("❌ 프롬프트를 찾을 수 없습니다.")
-            return
-        
-        # 3. 프롬프트 호출 및 답변 받기
-        ai_response = call_ai_with_prompt(prompt, submission_data)
-        
-        # 4. AI 응답과 입력 데이터를 세션에 저장 (디버깅 정보용)
-        st.session_state.ai_response = ai_response
-        st.session_state.submission_data = submission_data
-        st.session_state.prompt_text = prompt
-        st.session_state.answer_submitted = True  # 제출 상태 설정
-        
-        # 5. AI 응답에서 pass_fail 정보 추출
-        pass_fail = None
-        if ai_response and not ai_response.get('error'):
-            try:
-                # AI 응답에서 pass_fail 추출
-                ai_pass_fail = ai_response.get('pass_fail')
-                if ai_pass_fail:
-                    pass_fail = ai_pass_fail
-                    st.info(f"🤖 AI 응답에서 pass_fail 추출: {pass_fail}")
-                else:
-                    st.info("🤖 AI 응답에 pass_fail 정보가 없습니다.")
-            except Exception as e:
-                st.warning(f"AI 응답 정보 처리 중 오류: {str(e)}")
-        
-        # 6. 기존 채점 시스템 호출 (pass_fail 정보 포함)
-        answer_text = json.dumps(user_answers, ensure_ascii=False)
-        result = on_submit_answer(
-            user_id,
-            question,
-            answer_text,
-            pass_fail  # pass_fail 정보 전달
+        success = db.save_user_answer(
+            user_id=user_id,
+            question_id=question['id'],
+            user_answer="",  # answer는 비워둠
+            score=100 if pass_fail == 'PASS' else 0,  # PASS면 100점, FAIL이면 0점
+            time_taken=0,  # 시간 측정 없음
+            tokens_used=0,  # 토큰 사용 없음
+            pass_fail=pass_fail
         )
         
-        # 7. pass_fail 정보가 없으면 기본 채점 결과 사용
-        if pass_fail is None:
-            pass_fail = 'PASS' if result.get('passed', False) else 'FAIL'
-        
-        if result.get('success', True):
+        if success:
             # 결과 표시
-            if result.get('passed'):
-                st.success(f"🎉 통과! 점수: {result.get('score', 0):.1f}점")
-                st.success(f"💎 획득 XP: {result.get('xp_earned', 0)}")
+            if pass_fail == 'PASS':
+                st.success(f"🎉 통과! 모든 단계를 정확히 선택했습니다!")
             else:
-                st.warning(f"❌ 실패. 점수: {result.get('score', 0):.1f}점")
-            
-            # 피드백 표시
-            if result.get('feedback'):
-                st.info(f"📝 **피드백**: {result['feedback']}")
-            
-            # 레벨업 체크
-            if result.get('level_up'):
-                st.balloons()
-                st.success(f"🎊 레벨업! 새로운 레벨: {result.get('new_level')}")
+                st.warning(f"❌ 실패. 일부 단계에서 오답을 선택했습니다.")
             
             # 세션 정리하지 않고 결과 화면 유지
             # 문제 정보는 유지하되, 단계와 답안만 초기화
@@ -399,12 +417,6 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
                             st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
                             st.session_state.answer_submitted = False  # 제출 상태 초기화
                             # 결과 화면 관련 세션 정리
-                            if 'submission_data' in st.session_state:
-                                del st.session_state.submission_data
-                            if 'prompt_text' in st.session_state:
-                                del st.session_state.prompt_text
-                            if 'ai_response' in st.session_state:
-                                del st.session_state.ai_response
                             st.rerun()
                             break
                         elif attempt == 4:  # 마지막 시도
@@ -415,157 +427,14 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
                                 st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
                                 st.session_state.answer_submitted = False  # 제출 상태 초기화
                                 # 결과 화면 관련 세션 정리
-                                if 'submission_data' in st.session_state:
-                                    del st.session_state.submission_data
-                                if 'prompt_text' in st.session_state:
-                                    del st.session_state.prompt_text
-                                if 'ai_response' in st.session_state:
-                                    del st.session_state.ai_response
                                 st.rerun()
         else:
-            st.error(f"❌ 제출 실패: {result.get('message', '알 수 없는 오류')}")
+            st.error(f"❌ 제출 실패: 데이터베이스 저장에 실패했습니다.")
             
     except Exception as e:
         st.error(f"답안 제출 중 오류가 발생했습니다: {str(e)}")
 
 
-def create_submission_json(question: Dict, user_answers: list) -> Dict:
-    """문제와 답안을 JSON 구조로 변환"""
-    try:
-        # question이 딕셔너리가 아닌 경우 처리
-        if not isinstance(question, dict):
-            st.error(f"❌ question이 딕셔너리가 아닙니다. 타입: {type(question)}")
-            return {}
-        
-        # steps에서 문제 정보 추출
-        steps = question.get('steps', [])
-        if isinstance(steps, str):
-            try:
-                steps = json.loads(steps)
-            except json.JSONDecodeError as e:
-                st.error(f"❌ steps JSON 파싱 오류: {str(e)}")
-                return {}
-        
-        # answer_key, weights_map, feedback_map 생성
-        answer_key = []
-        weights_map = []
-        feedback_map = []
-        
-        for step in steps:
-            options = step.get('options', [])
-            if isinstance(options, str):
-                try:
-                    options = json.loads(options)
-                except:
-                    options = []
-            
-            # answer_key (정답) - 가중치가 1.0인 옵션을 정답으로 설정
-            correct_answer = 'A'  # 기본값
-            if options and len(options) > 0:
-                for option in options:
-                    if isinstance(option, dict):
-                        weight = option.get('weight', 0.5)
-                        if weight == 1.0:  # 가중치가 1.0인 옵션이 정답
-                            correct_answer = option.get('id', 'A')
-                            break
-                    else:
-                        # 딕셔너리가 아닌 경우 첫 번째 옵션을 정답으로 설정
-                        correct_answer = str(option)[0] if str(option) else 'A'
-                        break
-            answer_key.append(correct_answer)
-            
-            # weights_map 생성
-            weights = {}
-            for option in options:
-                if isinstance(option, dict):
-                    option_id = option.get('id', 'A')
-                    weight = option.get('weight', 0.5)  # 기본값 0.5
-                    weights[option_id] = weight
-            weights_map.append(weights)
-            
-            # feedback_map 생성
-            feedbacks = {}
-            for option in options:
-                if isinstance(option, dict):
-                    option_id = option.get('id', 'A')
-                    feedback = option.get('feedback', f'{option_id} 선택지에 대한 피드백')
-                    feedbacks[option_id] = feedback
-            feedback_map.append(feedbacks)
-        
-        # sessions 생성
-        sessions = []
-        for answer in user_answers:
-            if isinstance(answer, dict):
-                sessions.append({"selected_option_id": answer.get('selected_option_id', 'A')})
-            else:
-                # 문자열인 경우 첫 번째 문자를 ID로 사용
-                option_id = str(answer)[0] if answer else 'A'
-                sessions.append({"selected_option_id": option_id})
-        
-        # 최종 JSON 구조 생성
-        submission_data = {
-            "problem": {
-                "lang": "kr",
-                "problemTitle": question.get('question_text', '문제 제목'),
-                "scenario": question.get('scenario', ''),
-                "answer_key": answer_key,
-                "weights_map": weights_map,
-                "feedback_map": feedback_map
-            },
-            "sessions": sessions
-        }
-        
-        return submission_data
-        
-    except Exception as e:
-        st.error(f"JSON 구조 생성 중 오류: {str(e)}")
-        return {}
-
-
-def call_ai_with_prompt(system_prompt: str, submission_data: Dict) -> Dict:
-    """프롬프트와 데이터를 사용하여 AI 호출"""
-    try:
-        # OpenAI 클라이언트 확인
-        from src.core.config import OPENAI_API_KEY
-        if not OPENAI_API_KEY:
-            return {"error": "OpenAI API 키가 설정되지 않았습니다."}
-        
-        from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        
-        # 사용자 프롬프트 생성 (제출 데이터 포함)
-        user_prompt = f"""
-다음 데이터를 분석해주세요:
-
-{json.dumps(submission_data, ensure_ascii=False, indent=2)}
-
-위 데이터를 바탕으로 분석 결과를 JSON 형태로 제공해주세요.
-"""
-        
-        # OpenAI API 호출
-        from src.core.config import OPENAI_MODEL
-        response = client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
-        )
-        
-        # 응답 파싱
-        content = response.choices[0].message.content
-        
-        try:
-            # JSON 파싱 시도
-            ai_response = json.loads(content)
-        except Exception as parse_error:
-            # JSON 파싱 실패 시 텍스트로 반환
-            ai_response = {"response": content, "parsed": False}
-        
-        return ai_response
-        
-    except Exception as e:
-        return {"error": f"AI 호출 중 오류: {str(e)}"}
 
 
 def render_difficulty_guide():
