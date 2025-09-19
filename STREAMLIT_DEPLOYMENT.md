@@ -1,8 +1,17 @@
 # Streamlit Cloud 배포 가이드
 
-## 1. Streamlit Cloud에서 Secrets 설정
+## 1. 환경별 설정 방법
 
-### 방법 1: 웹 인터페이스에서 설정
+### 로컬 개발 환경
+1. `.env` 파일을 프로젝트 루트에 생성
+2. 다음 내용 추가:
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+SUPABASE_URL=your_supabase_url_here
+SUPABASE_ANON_KEY=your_supabase_anon_key_here
+```
+
+### Streamlit Cloud 배포 환경
 1. Streamlit Cloud 대시보드에서 프로젝트 선택
 2. "Settings" → "Secrets" 탭으로 이동
 3. 다음 secrets 추가:
@@ -13,23 +22,19 @@ SUPABASE_URL = "your_supabase_url_here"
 SUPABASE_ANON_KEY = "your_supabase_anon_key_here"
 ```
 
-### 방법 2: GitHub Secrets 사용
-GitHub Repository → Settings → Secrets and variables → Actions에서 다음 secrets 추가:
-- `OPENAI_API_KEY`
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
+## 2. 자동 환경 감지
 
-## 2. 로컬 개발 환경 설정
-
-### .streamlit/secrets.toml 파일 생성
-```toml
-OPENAI_API_KEY = "your_openai_api_key_here"
-SUPABASE_URL = "your_supabase_url_here"
-SUPABASE_ANON_KEY = "your_supabase_anon_key_here"
-```
+애플리케이션이 자동으로 환경을 감지합니다:
+- **로컬 환경**: `.env` 파일 사용
+- **Streamlit Cloud**: secrets 사용
 
 ## 3. 환경변수 우선순위
 
+### 로컬 환경
+1. **.env 파일** (최우선)
+2. **환경변수** (fallback)
+
+### Streamlit Cloud
 1. **Streamlit Secrets** (최우선)
 2. **환경변수** (fallback)
 

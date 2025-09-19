@@ -163,7 +163,10 @@ class AuthenticationManager:
                     del st.session_state[key]
     
     def is_authenticated(self) -> bool:
-        """인증 상태 확인"""
+        """인증 상태 확인 - 세션 유지 강화"""
+        # 세션 상태 초기화 (페이지 새로고침 시 복구)
+        self._restore_session_if_needed()
+        
         # 여러 방법으로 인증 상태 확인
         has_user_id = 'user_id' in st.session_state and st.session_state.user_id
         has_supabase_user = self.supabase_auth.is_authenticated()
@@ -181,6 +184,30 @@ class AuthenticationManager:
         
         # 인증 성공 조건: user_id가 있거나 login_completed가 True
         return (has_user_id and has_supabase_user) or (has_login_completed and has_user_email)
+    
+    def _restore_session_if_needed(self):
+        """세션 상태 복구 (페이지 새로고침 시)"""
+        try:
+            # Supabase에서 현재 사용자 정보 확인
+            current_user = self.supabase_auth.get_current_user()
+            
+            if current_user and not st.session_state.get('user_id'):
+                # Supabase에는 사용자가 있지만 세션에는 없는 경우 복구
+                user_id = current_user.get('user_id') or current_user.get('id')
+                email = current_user.get('email', '')
+                
+                if user_id and email:
+                    # 세션 상태 복구
+                    st.session_state.user_id = user_id
+                    st.session_state.user_email = email
+                    st.session_state.login_completed = True
+                    
+                    # Supabase 세션도 복구
+                    self.supabase_auth.set_user_session(current_user)
+                    
+        except Exception as e:
+            # 복구 실패 시 무시 (로그인 페이지로 이동)
+            pass
     
     def get_current_user_id(self) -> Optional[str]:
         """현재 사용자 ID 반환"""

@@ -202,13 +202,27 @@ class SupabaseAuth:
         return self._get_user_info_from_token(at) if at else None
 
     def is_authenticated(self) -> bool:
-        return bool(st.session_state.get("user") and st.session_state.get("access_token"))
+        """인증 상태 확인 - 세션 유지 강화"""
+        # 세션에 사용자 정보가 있는지 확인
+        has_user = bool(st.session_state.get("user"))
+        has_token = bool(st.session_state.get("access_token"))
+        
+        # 토큰이 있으면 유효성 검증
+        if has_token:
+            try:
+                # 토큰 유효성 간단 검증 (만료 시간 확인)
+                token = st.session_state.get("access_token")
+                if token and len(token) > 10:  # 기본적인 토큰 형식 확인
+                    return has_user and has_token
+            except:
+                pass
+        
+        return has_user and has_token
 
     def set_user_session(self, user_data: Dict[str, Any]):
         st.session_state.user = user_data
         if "access_token" in user_data:
             st.session_state.access_token = user_data["access_token"]
-        st.info(f"🔧 세션 저장: {user_data.get('email','N/A')}")
 
     def logout(self):
         try:

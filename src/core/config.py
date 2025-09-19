@@ -6,17 +6,46 @@ AI Master Quest 설정 및 상수 정의
 import os
 import streamlit as st
 
-# Streamlit secrets에서 환경변수 로드 (Streamlit Cloud 호환)
-def get_secret(key: str, default: str = None) -> str:
-    """Streamlit secrets에서 환경변수 가져오기"""
+def is_streamlit_cloud():
+    """Streamlit Cloud 환경인지 확인"""
     try:
-        # Streamlit secrets에서 먼저 시도
-        if hasattr(st, 'secrets') and key in st.secrets:
-            return st.secrets[key]
+        # Streamlit Cloud 환경 감지
+        return (
+            os.getenv('STREAMLIT_SERVER_BASE_URL_PATH') or
+            os.getenv('STREAMLIT_SERVER_PORT') == '8501' or
+            'streamlit.app' in str(st.get_option('server.headless', '')) or
+            os.getenv('STREAMLIT_SHARING_MODE') == 'True' or
+            hasattr(st, 'secrets') and hasattr(st.secrets, '_secrets')
+        )
     except:
-        pass
+        return False
+
+def get_secret(key: str, default: str = None) -> str:
+    """환경에 따라 적절한 방법으로 환경변수 가져오기"""
+    if is_streamlit_cloud():
+        # Streamlit Cloud 환경: secrets 사용
+        try:
+            if hasattr(st, 'secrets') and key in st.secrets:
+                return st.secrets[key]
+        except:
+            pass
+    else:
+        # 로컬 환경: .env 파일 사용
+        try:
+            from dotenv import load_dotenv
+            # 현재 디렉토리에서 .env 파일 로드
+            load_dotenv(override=True)
+            value = os.getenv(key, default)
+            if value and value != default:
+                return value
+        except ImportError:
+            # python-dotenv가 없는 경우 환경변수만 사용
+            pass
+        except Exception as e:
+            # .env 파일 로드 실패 시 환경변수에서 시도
+            pass
     
-    # 환경변수에서 시도
+    # fallback: 환경변수에서 시도
     return os.getenv(key, default)
 
 # OpenAI 설정
@@ -26,6 +55,31 @@ OPENAI_MODEL = "gpt-5"
 # Supabase 설정
 SUPABASE_URL = get_secret('SUPABASE_URL')
 SUPABASE_ANON_KEY = get_secret('SUPABASE_ANON_KEY')
+
+# 디버깅: 환경변수 로드 상태 확인
+def debug_env_loading():
+    """환경변수 로드 상태 디버깅"""
+    print(f"🔍 환경 감지: {'Streamlit Cloud' if is_streamlit_cloud() else '로컬'}")
+    print(f"🔍 OPENAI_API_KEY: {'설정됨' if OPENAI_API_KEY else '없음'}")
+    print(f"🔍 SUPABASE_URL: {'설정됨' if SUPABASE_URL else '없음'}")
+    print(f"🔍 SUPABASE_ANON_KEY: {'설정됨' if SUPABASE_ANON_KEY else '없음'}")
+    
+    # .env 파일 존재 확인
+    if not is_streamlit_cloud():
+        env_file_exists = os.path.exists('.env')
+        print(f"🔍 .env 파일 존재: {'예' if env_file_exists else '아니오'}")
+        
+        if env_file_exists:
+            try:
+                with open('.env', 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    print(f"🔍 .env 파일 크기: {len(content)} bytes")
+                    print(f"🔍 .env 파일 내용 미리보기: {content[:100]}...")
+            except Exception as e:
+                print(f"🔍 .env 파일 읽기 오류: {e}")
+
+# 자동 디버깅 실행
+debug_env_loading()
 
 # 환경변수 검증
 def validate_environment():
@@ -43,14 +97,25 @@ def validate_environment():
         print("❌ 다음 환경변수가 설정되지 않았습니다:")
         for var in missing_vars:
             print(f"   - {var}")
-        print("\n📝 .env 파일을 생성하고 다음 내용을 추가하세요:")
-        print("SUPABASE_URL=your_supabase_url_here")
-        print("SUPABASE_ANON_KEY=your_supabase_anon_key_here")
-        print("OPENAI_API_KEY=your_openai_api_key_here")
-        print("\n🔗 Supabase 설정 방법:")
-        print("1. https://supabase.com 에서 프로젝트 생성")
-        print("2. Settings → API에서 URL과 anon key 복사")
-        print("3. .env 파일에 추가")
+        
+        if is_streamlit_cloud():
+            print("\n📝 Streamlit Cloud에서 secrets를 설정하세요:")
+            print("1. Streamlit Cloud 대시보드 → Settings → Secrets")
+            print("2. 다음 secrets 추가:")
+            print("   OPENAI_API_KEY=your_openai_api_key_here")
+            print("   SUPABASE_URL=your_supabase_url_here")
+            print("   SUPABASE_ANON_KEY=your_supabase_anon_key_here")
+        else:
+            print("\n📝 로컬 개발 환경:")
+            print("1. .env 파일을 생성하고 다음 내용을 추가하세요:")
+            print("   SUPABASE_URL=your_supabase_url_here")
+            print("   SUPABASE_ANON_KEY=your_supabase_anon_key_here")
+            print("   OPENAI_API_KEY=your_openai_api_key_here")
+            print("\n🔗 Supabase 설정 방법:")
+            print("1. https://supabase.com 에서 프로젝트 생성")
+            print("2. Settings → API에서 URL과 anon key 복사")
+            print("3. .env 파일에 추가")
+        
         return False
     
     return True

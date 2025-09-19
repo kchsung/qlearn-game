@@ -8,6 +8,13 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# .env 파일 로드 (로컬 환경용)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+except ImportError:
+    pass
+
 import streamlit as st
 from src.app import AIAssessmentGame
 from src.core.config import validate_environment
@@ -239,9 +246,26 @@ def main():
         st.error("❌ 환경변수가 설정되지 않았습니다. 위의 안내를 따라 .env 파일을 생성하세요.")
         st.stop()
     
+    # 세션 상태 초기화 (페이지 새로고침 시 복구)
+    _initialize_session_state()
+    
     # 애플리케이션 실행
     app = AIAssessmentGame()
     app.run()
+
+def _initialize_session_state():
+    """세션 상태 초기화 및 복구"""
+    # 기본 세션 상태 설정
+    if 'session_initialized' not in st.session_state:
+        st.session_state.session_initialized = True
+        
+        # 인증 관련 세션 상태 초기화
+        auth_keys = ['user_id', 'user_profile', 'user', 'access_token', 
+                    'login_completed', 'user_email', 'supabase_user']
+        
+        for key in auth_keys:
+            if key not in st.session_state:
+                st.session_state[key] = None
 
 if __name__ == "__main__":
     main()
