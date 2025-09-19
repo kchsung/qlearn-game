@@ -18,11 +18,29 @@ class SupabaseAuth:
         self.supabase_url = SUPABASE_URL
         self.supabase_anon_key = SUPABASE_ANON_KEY
 
+        # 동적 redirect_uri 설정
         try:
-            port = st.get_option("server.port") or 8501
-            self.redirect_uri = f"http://localhost:{port}"
+            import os
+            import streamlit as st
+            
+            # Streamlit Cloud 환경 감지
+            is_streamlit_cloud = (
+                os.getenv('STREAMLIT_SERVER_BASE_URL_PATH') or
+                os.getenv('STREAMLIT_SERVER_PORT') == '8501' or
+                'streamlit.app' in str(st.get_option('server.headless', '')) or
+                os.getenv('STREAMLIT_SHARING_MODE') == 'True'
+            )
+            
+            if is_streamlit_cloud:
+                # Streamlit Cloud 환경
+                self.redirect_uri = "https://qlearn-game.streamlit.app"
+            else:
+                # 로컬 환경
+                port = st.get_option("server.port") or 8501
+                self.redirect_uri = f"http://localhost:{port}"
         except:
-            self.redirect_uri = "http://localhost:8501"
+            # 기본값: Streamlit Cloud URL (배포 환경 우선)
+            self.redirect_uri = "https://qlearn-game.streamlit.app"
 
         if not self.supabase_url or not self.supabase_anon_key:
             st.error("SUPABASE_URL / SUPABASE_ANON_KEY 누락")
