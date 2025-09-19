@@ -64,7 +64,7 @@ def render_promotion_exam(profile: Dict, game_engine, db, user_id: str):
         if 'user_answers' not in exam:
             exam['user_answers'] = []
         if 'start_time' not in exam:
-            exam['start_time'] = time.time()
+                exam['start_time'] = time.time()
         
         if not exam['exam_submitted']:
             # 승급 시험 문제 표시 (도전하기와 동일한 방식)
@@ -290,11 +290,13 @@ def render_promotion_result(exam: Dict, game_engine, user_id: str):
         st.markdown("---")
         st.subheader("📋 상세 평가 결과")
         
-        # detail 코멘트 표시
+        # detail 코멘트 표시 (마크다운 형태로 그대로 표시)
         detail = ai_response.get('detail', '')
         if detail:
             st.markdown("#### 💬 AI 평가 코멘트")
-            st.markdown(detail)
+            # 줄바꿈 문자를 HTML <br> 태그로 변환하여 표시
+            formatted_detail = detail.replace('\n', '\n\n')
+            st.markdown(formatted_detail)
         
         # 승급 시험 통과 조건 확인 (200점 만점에서 100점 이상)
         if pass_fail == "PASS" and score >= 100:
@@ -326,6 +328,8 @@ def render_promotion_result(exam: Dict, game_engine, user_id: str):
                                 
                         except Exception as e:
                             st.error(f"승급 처리 중 오류: {str(e)}")
+                            import traceback
+                            st.error(f"상세 오류: {traceback.format_exc()}")
                 
                 with col2:
                     if st.button("❌ 취소", key="promotion_cancel"):
@@ -336,7 +340,7 @@ def render_promotion_result(exam: Dict, game_engine, user_id: str):
                 if st.button("🏠 메인으로 돌아가기", type="primary", key="promotion_home"):
                     del st.session_state.promotion_exam
                     st.rerun()
-            
+        
         else:
             st.error("❌ 승급 시험에 실패했습니다.")
             
@@ -548,14 +552,13 @@ def call_ai_with_prompt(system_prompt: str, submission_data: Dict) -> Dict:
 """
         
         # OpenAI API 호출
+        from src.core.config import OPENAI_MODEL
         response = client.chat.completions.create(
-            model="gpt-4",
+            model=OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.3,
-            max_tokens=2000
+            ]
         )
         
         # 응답 파싱
@@ -599,9 +602,9 @@ def render_promotion_requirements(profile: Dict):
     with col3:
         progress = (current_xp / required_xp) * 100 if required_xp > 0 else 0
         st.metric("진행률", f"{progress:.1f}%")
-        # 진행률을 0.0과 1.0 사이로 제한
-        progress_value = min(1.0, max(0.0, progress / 100))
-        st.progress(progress_value)
+    # 진행률을 0.0과 1.0 사이로 제한
+    progress_value = min(1.0, max(0.0, progress / 100))
+    st.progress(progress_value)
     
     # 부족한 조건 표시
     if current_xp < required_xp:

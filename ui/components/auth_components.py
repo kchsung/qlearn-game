@@ -113,13 +113,15 @@ def render_google_login_only(on_google_login: Callable[[], None]):
 def render_user_sidebar(profile: dict, on_logout: Callable[[], None]):
     """사용자 사이드바 렌더링"""
     with st.sidebar:
-        st.header("👤 사용자 프로필")
+        # 사용자명으로 헤더 표시
+        username = profile.get('username', '사용자')
+        st.header(f"👤 {username}")
         
         # 프로필 이미지
         if profile.get("profile_image"):
             st.markdown(f'<img src="{profile["profile_image"]}" width="150">', unsafe_allow_html=True)
         
-        # 사용자 정보
+        # 게임 제목
         st.markdown("### AI Master Quest")
         
         # 레벨 정보 (기본값 처리)
@@ -144,7 +146,7 @@ def render_user_sidebar(profile: dict, on_logout: Callable[[], None]):
         col1, col2 = st.columns(2)
         with col1:
             accuracy = profile.get('accuracy', 0.0)
-            st.metric("정답률", f"{accuracy:.1f}%")
+            st.metric("정답률", f"{accuracy:.0f}%")
             st.metric("현재 연속", profile.get('current_streak', 0))
         
         with col2:

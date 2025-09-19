@@ -31,13 +31,17 @@ def safe_rerun():
 def render_user_sidebar(profile: Dict, on_logout):
     """사용자 사이드바 렌더링"""
     with st.sidebar:
-        st.header("👤 사용자 프로필")
+        # 사용자명으로 헤더 표시
+        username = profile.get('username', '사용자')
+        st.header(f"👤 {username}")
         
         # 프로필 이미지
         st.markdown(f'<img src="{profile["profile_image"]}" width="150">', unsafe_allow_html=True)
         
-        # 사용자 정보
-        st.markdown(f"### {profile['username']}")
+        # 게임 제목
+        st.markdown("### AI Master Quest")
+        
+        # 레벨 정보
         st.markdown(f"**레벨 {profile['level']}** {profile['level_icon']} {profile['level_name']}")
         
         # 경험치 바
@@ -51,7 +55,7 @@ def render_user_sidebar(profile: Dict, on_logout):
         col1, col2 = st.columns(2)
         with col1:
             accuracy = profile['accuracy'] if profile['accuracy'] is not None else 0.0
-            st.metric("정답률", f"{accuracy:.1f}%")
+            st.metric("정답률", f"{accuracy:.0f}%")
             st.metric("현재 연속", profile['current_streak'])
         
         with col2:

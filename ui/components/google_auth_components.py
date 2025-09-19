@@ -59,7 +59,9 @@ def render_google_login_button(on_google_login: Callable[[], None]):
 def render_user_profile_sidebar(user_data: dict, on_logout: Callable[[], None]):
     """사용자 프로필 사이드바 렌더링"""
     with st.sidebar:
-        st.header("👤 사용자 프로필")
+        # 사용자명으로 헤더 표시
+        username = user_data.get('name', '사용자')
+        st.header(f"👤 {username}")
         
         # 프로필 이미지
         if user_data.get('avatar_url'):
@@ -74,8 +76,10 @@ def render_user_profile_sidebar(user_data: dict, on_logout: Callable[[], None]):
             </div>
             """, unsafe_allow_html=True)
         
-        # 사용자 정보
-        st.markdown(f"### {user_data.get('name', '사용자')}")
+        # 게임 제목
+        st.markdown("### AI Master Quest")
+        
+        # 이메일 정보
         st.markdown(f"**이메일:** {user_data.get('email', '')}")
         
         # 로그아웃 버튼

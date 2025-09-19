@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 import streamlit as st
 
 from src.core.config import (
-    OPENAI_API_KEY, OPENAI_MODEL, OPENAI_MAX_TOKENS, OPENAI_TEMPERATURE,
+    OPENAI_API_KEY, OPENAI_MODEL,
     GRADING_CRITERIA, LEVEL_COLORS, LEVEL_ICONS
 )
 
@@ -50,11 +50,25 @@ class ProfileGenerator:
             # 사용자 이니셜
             initials = ''.join([word[0].upper() for word in username.split()[:2]])
             
-            # 텍스트 그리기
+            # 텍스트 그리기 (Pretendard 폰트 우선 시도)
             try:
-                font = ImageFont.truetype("arial.ttf", 80)
+                # Pretendard 폰트 시도 (Windows)
+                font = ImageFont.truetype("C:/Windows/Fonts/pretendard.ttf", 80)
             except:
-                font = ImageFont.load_default()
+                try:
+                    # Pretendard 폰트 시도 (macOS)
+                    font = ImageFont.truetype("/System/Library/Fonts/pretendard.ttf", 80)
+                except:
+                    try:
+                        # Pretendard 폰트 시도 (Linux)
+                        font = ImageFont.truetype("/usr/share/fonts/truetype/pretendard.ttf", 80)
+                    except:
+                        try:
+                            # 기본 시스템 폰트 시도
+                            font = ImageFont.truetype("arial.ttf", 80)
+                        except:
+                            # 최종 fallback
+                            font = ImageFont.load_default()
             
             draw.text((100, 100), initials, fill='white', anchor='mm', font=font)
             
@@ -119,9 +133,7 @@ class AutoGrader:
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
-                ],
-                temperature=OPENAI_TEMPERATURE,
-                max_tokens=OPENAI_MAX_TOKENS
+                ]
             )
             
             # 응답 파싱

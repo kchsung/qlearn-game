@@ -571,14 +571,13 @@ def call_ai_with_prompt(system_prompt: str, submission_data: Dict) -> Dict:
 """
         
         # OpenAI API 호출
+        from src.core.config import OPENAI_MODEL
         response = client.chat.completions.create(
-            model="gpt-4",
+            model=OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.3,
-            max_tokens=2000
+            ]
         )
         
         # 응답 파싱

@@ -13,9 +13,7 @@ load_dotenv()
 
 # OpenAI 설정
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-OPENAI_MODEL = "gpt-4"
-OPENAI_MAX_TOKENS = 1000
-OPENAI_TEMPERATURE = 0.3
+OPENAI_MODEL = "gpt-5"
 
 # Supabase 설정
 SUPABASE_URL = os.getenv('SUPABASE_URL')
@@ -144,11 +142,11 @@ LEVEL_COLORS = {
     5: '#FF6347'   # Tomato
 }
 
-# 레벨별 아이콘 설정
+# 레벨별 아이콘 설정 (성장 과정)
 LEVEL_ICONS = {
-    1: '🌱',
-    2: '🔍',
-    3: '⚙️',
-    4: '🎯',
-    5: '🏆'
+    1: '🌱',  # 새싹 - 시작
+    2: '🌿',  # 잎사귀 - 성장
+    3: '🌳',  # 나무 - 발전
+    4: '🌟',  # 별 - 숙련
+    5: '👑'   # 왕관 - 마스터
 }
