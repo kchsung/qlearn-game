@@ -69,36 +69,12 @@ class SupabaseAuth:
             st.error("❌ OAuth URL 생성 실패")
             return ""
 
-        # 2) 현재 탭에서 최상위 컨텍스트로 '교체 이동' (history replace)
-        # - iframe일 경우에도 버튼 클릭(사용자 activation)로 top navigation 허용
-        st.components.v1.html(f"""
-          <div style="display:flex;gap:8px;align-items:center">
-            <button id="glogin" style="padding:10px 14px;border-radius:8px">
-              🔐 Google Login
-            </button>
-            <span style="opacity:.6">현재 탭에서 이동합니다</span>
-          </div>
-          <script>
-            const url = {url!r};
-            const go = () => {{
-              try {{
-                // 한 탭에서만 이동 + 뒤로가기 히스토리 남기지 않음
-                if (window.top && window.top !== window) {{
-                  window.top.location.replace(url);
-                }} else {{
-                  window.location.replace(url);
-                }}
-              }} catch (e) {{
-                // 최후 수단
-                window.location.href = url;
-              }}
-            }};
-            document.getElementById('glogin').addEventListener('click', (e) => {{
-              e.preventDefault();
-              go();
-            }});
-          </script>
-        """, height=60)
+        # 2) Streamlit 링크 버튼 사용 (iframe sandboxing 문제 해결)
+        st.markdown("🔐 Google OAuth 로그인")
+        st.link_button("Google로 로그인", url)
+        
+        # 추가 안내
+        st.info("💡 버튼을 클릭하면 Google OAuth 페이지로 이동합니다.")
         
         # location.replace()를 쓰면 히스토리에 쌓이지 않아 "뒤로가기" 시 중간 페이지가 남지 않습니다.
         # 버튼 클릭 이벤트로 실행되므로 iframe에서도 top-navigation이 허용됩니다(브라우저 정책상 "user activation" 필요).
