@@ -52,32 +52,60 @@ class SupabaseAuth:
 
     def get_google_auth_url(self) -> str:
         """Google OAuth URL 생성"""
-        if not self.supabase: 
+        if not self.supabase:
             st.error("❌ Supabase 클라이언트가 없습니다")
             return ""
-        
-        try:
-            # 가장 간단한 형태로 OAuth URL 생성
-            res = self.supabase.auth.sign_in_with_oauth({
-                "provider": "google",
-                "options": {
-                    "redirect_to": self.redirect_uri
-                }
-            })
-            
-            # URL 추출
-            if hasattr(res, 'url'):
-                url = res.url
-            elif isinstance(res, dict) and 'url' in res:
-                url = res['url']
-            else:
-                url = str(res)
-            
-            return url
-            
-        except Exception as e:
-            st.error(f"❌ Google OAuth URL 생성 오류: {str(e)}")
+
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # 1) OAuth URL 발급
+        res = self.supabase.auth.sign_in_with_oauth({
+            "provider": "google",
+            "options": {"redirect_to": self.redirect_uri}
+        })
+        url = getattr(res, "url", None) or (isinstance(res, dict) and res.get("url")) or str(res)
+        if not url:
+            st.error("❌ OAuth URL 생성 실패")
             return ""
+
+        # 2) 현재 탭에서 최상위 컨텍스트로 '교체 이동' (history replace)
+        # - iframe일 경우에도 버튼 클릭(사용자 activation)로 top navigation 허용
+        st.components.v1.html(f"""
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="glogin" style="padding:10px 14px;border-radius:8px">
+              🔐 Google Login
+            </button>
+            <span style="opacity:.6">현재 탭에서 이동합니다</span>
+          </div>
+          <script>
+            const url = {url!r};
+            const go = () => {{
+              try {{
+                // 한 탭에서만 이동 + 뒤로가기 히스토리 남기지 않음
+                if (window.top && window.top !== window) {{
+                  window.top.location.replace(url);
+                }} else {{
+                  window.location.replace(url);
+                }}
+              }} catch (e) {{
+                // 최후 수단
+                window.location.href = url;
+              }}
+            }};
+            document.getElementById('glogin').addEventListener('click', (e) => {{
+              e.preventDefault();
+              go();
+            }});
+          </script>
+        """, height=60)
+        
+        # location.replace()를 쓰면 히스토리에 쌓이지 않아 "뒤로가기" 시 중간 페이지가 남지 않습니다.
+        # 버튼 클릭 이벤트로 실행되므로 iframe에서도 top-navigation이 허용됩니다(브라우저 정책상 "user activation" 필요).
+        # 자동 리다이렉트가 꼭 필요하면, 버튼 대신 바로 go()를 호출해도 됩니다.
+        # 다만 일부 브라우저/임베드 환경에서 사용자 액션 없이 최상위 이동이 막힐 수 있으므로 버튼 클릭 방식이 가장 안전합니다.
+        st.stop()
+        return url
 
     def handle_oauth_callback(self) -> Optional[Dict[str, Any]]:
         """OAuth 콜백 처리"""
