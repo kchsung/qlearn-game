@@ -51,37 +51,53 @@ class SupabaseAuth:
         self.supabase = _get_supabase(self.supabase_url, self.supabase_anon_key)
 
     def get_google_auth_url(self) -> str:
-        """Google OAuth URL 생성"""
         if not self.supabase:
             st.error("❌ Supabase 클라이언트가 없습니다")
             return ""
 
-        import logging
-        logger = logging.getLogger(__name__)
+        # 1) OAuth URL 1회 발급 (rerun 대비)
+        if "oauth_url" not in st.session_state:
+            res = self.supabase.auth.sign_in_with_oauth({
+                "provider": "google",
+                "options": {"redirect_to": self.redirect_uri}
+            })
+            st.session_state["oauth_url"] = getattr(res, "url", None) or (
+                isinstance(res, dict) and res.get("url")
+            ) or str(res)
 
-        # 1) OAuth URL 발급
-        res = self.supabase.auth.sign_in_with_oauth({
-            "provider": "google",
-            "options": {"redirect_to": self.redirect_uri}
-        })
-        url = getattr(res, "url", None) or (isinstance(res, dict) and res.get("url")) or str(res)
+        url = st.session_state["oauth_url"]
         if not url:
             st.error("❌ OAuth URL 생성 실패")
             return ""
 
-        # 2) Streamlit 링크 버튼 사용 (iframe sandboxing 문제 해결)
-        st.markdown("🔐 Google OAuth 로그인")
-        st.link_button("Google로 로그인", url)
-        
-        # 추가 안내
-        st.info("💡 버튼을 클릭하면 Google OAuth 페이지로 이동합니다.")
-        
-        # location.replace()를 쓰면 히스토리에 쌓이지 않아 "뒤로가기" 시 중간 페이지가 남지 않습니다.
-        # 버튼 클릭 이벤트로 실행되므로 iframe에서도 top-navigation이 허용됩니다(브라우저 정책상 "user activation" 필요).
-        # 자동 리다이렉트가 꼭 필요하면, 버튼 대신 바로 go()를 호출해도 됩니다.
-        # 다만 일부 브라우저/임베드 환경에서 사용자 액션 없이 최상위 이동이 막힐 수 있으므로 버튼 클릭 방식이 가장 안전합니다.
+        # 2) 현재 탭(top)으로 히스토리 교체 이동 (새 창 X)
+        st.components.v1.html(f"""
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="glogin" type="button" style="padding:10px 14px;border-radius:8px">
+              🔐 Google로 로그인
+            </button>
+            <span style="opacity:.6">현재 탭에서 이동합니다</span>
+          </div>
+          <script>
+            (function(){{
+              const url = {url!r};
+              function go(){{
+                try {{
+                  if (window.top && window.top !== window) {{
+                    window.top.location.replace(url);   // 최상위 탭에서 교체 이동
+                  }} else {{
+                    window.location.replace(url);       // 현재 탭에서 교체 이동
+                  }}
+                }} catch(e) {{ window.location.href = url; }}
+              }}
+              const btn = document.getElementById('glogin');
+              if (btn) btn.addEventListener('click', function(ev){{ ev.preventDefault(); go(); }});
+            }})();
+          </script>
+        """, height=60, key="oauth_login_html")
+
         st.stop()
-        return url
+
 
     def handle_oauth_callback(self) -> Optional[Dict[str, Any]]:
         """OAuth 콜백 처리"""
