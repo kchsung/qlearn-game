@@ -55,48 +55,42 @@ class SupabaseAuth:
             st.error("❌ Supabase 클라이언트가 없습니다")
             return ""
 
-        # 1) OAuth URL 1회 발급 (rerun 대비)
+        # OAuth URL 1회만 생성 (rerun 방지)
         if "oauth_url" not in st.session_state:
             res = self.supabase.auth.sign_in_with_oauth({
                 "provider": "google",
                 "options": {"redirect_to": self.redirect_uri}
             })
-            st.session_state["oauth_url"] = getattr(res, "url", None) or (
-                isinstance(res, dict) and res.get("url")
-            ) or str(res)
-
+            st.session_state["oauth_url"] = (
+                getattr(res, "url", None)
+                or (isinstance(res, dict) and res.get("url"))
+                or str(res)
+            )
         url = st.session_state["oauth_url"]
         if not url:
             st.error("❌ OAuth URL 생성 실패")
             return ""
 
-        # 2) 현재 탭(top)으로 히스토리 교체 이동 (새 창 X)
-        st.components.v1.html(f"""
-          <div style="display:flex;gap:8px;align-items:center">
-            <button id="glogin" type="button" style="padding:10px 14px;border-radius:8px">
-              🔐 Google로 로그인
-            </button>
-            <span style="opacity:.6">현재 탭에서 이동합니다</span>
-          </div>
-          <script>
-            (function(){{
-              const url = {url!r};
-              function go(){{
-                try {{
-                  if (window.top && window.top !== window) {{
-                    window.top.location.replace(url);   // 최상위 탭에서 교체 이동
-                  }} else {{
-                    window.location.replace(url);       // 현재 탭에서 교체 이동
-                  }}
-                }} catch(e) {{ window.location.href = url; }}
-              }}
-              const btn = document.getElementById('glogin');
-              if (btn) btn.addEventListener('click', function(ev){{ ev.preventDefault(); go(); }});
-            }})();
-          </script>
-        """, height=60, key="oauth_login_html")
+        # ✅ 자바스크립트 없이, 같은 탭으로 이동(target="_self")
+        st.markdown(f"""
+        <a href="{url}" target="_self"
+        style="
+            display:inline-block;
+            padding:10px 14px;
+            border-radius:8px;
+            background:#ef4444;
+            color:#fff;
+            text-decoration:none;
+            font-weight:600;
+        ">
+        🔐 Google로 로그인
+        </a>
+        <span style="opacity:.6;margin-left:8px">현재 탭에서 이동합니다</span>
+        """, unsafe_allow_html=True)
 
         st.stop()
+
+
 
 
     def handle_oauth_callback(self) -> Optional[Dict[str, Any]]:
