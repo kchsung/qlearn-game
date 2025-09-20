@@ -73,19 +73,28 @@ class SupabaseAuth:
 
         # ✅ 자바스크립트 없이, 같은 탭으로 이동(target="_self")
         st.markdown(f"""
-        <a href="{url}" target="_self"
-        style="
-            display:inline-block;
-            padding:10px 14px;
-            border-radius:8px;
-            background:#ef4444;
-            color:#fff;
-            text-decoration:none;
-            font-weight:600;
-        ">
-        🔐 Google로 로그인
-        </a>
-        <span style="opacity:.6;margin-left:8px">현재 탭에서 이동합니다</span>
+        <div style="text-align:center;margin:20px 0;">
+            <a href="{url}" target="_self"
+            style="
+                display:inline-block;
+                padding:12px 24px;
+                border-radius:8px;
+                background:#4285f4;
+                color:#fff;
+                text-decoration:none;
+                font-weight:600;
+                font-size:16px;
+                box-shadow:0 2px 4px rgba(0,0,0,0.1);
+                transition:background-color 0.2s;
+            "
+            onmouseover="this.style.background='#3367d6'"
+            onmouseout="this.style.background='#4285f4'">
+            🔐 Google로 로그인
+            </a>
+            <div style="margin-top:12px;opacity:0.7;font-size:14px;color:#666;">
+                현재 탭에서 이동합니다
+            </div>
+        </div>
         """, unsafe_allow_html=True)
 
         st.stop()
