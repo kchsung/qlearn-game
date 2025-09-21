@@ -281,11 +281,27 @@ class GameDatabase:
             st.error(f"프롬프트 조회 오류: {str(e)}")
             return None
     
-    def get_random_question(self, difficulty: str = '보통', area: str = 'ai', exclude_question_ids: List[str] = None) -> Optional[Dict[str, Any]]:
-        """랜덤 문제 조회 (multiple_choice 타입만, steps 정보가 있는 문제만, 제외할 문제 ID 목록 적용)"""
+    def get_available_question_types(self) -> List[str]:
+        """사용 가능한 문제 유형 목록 조회"""
         try:
-            # multiple_choice 타입이고 steps 정보가 있는 문제만 조회
-            all_questions = self.supabase.table('questions').select('*').eq('difficulty', difficulty).eq('type', 'multiple_choice').execute()
+            # 모든 문제의 type 필드를 조회하여 고유한 유형들 추출
+            result = self.supabase.table('questions').select('type').execute()
+            
+            if result.data:
+                # 고유한 타입들 추출
+                unique_types = list(set([q.get('type') for q in result.data if q.get('type')]))
+                return sorted(unique_types)
+            else:
+                return ['multiple_choice']  # 기본값
+                
+        except Exception as e:
+            return ['multiple_choice']  # 오류 시 기본값
+
+    def get_random_question(self, difficulty: str = '보통', question_type: str = 'multiple_choice', exclude_question_ids: List[str] = None) -> Optional[Dict[str, Any]]:
+        """랜덤 문제 조회 (지정된 유형, steps 정보가 있는 문제만, 제외할 문제 ID 목록 적용)"""
+        try:
+            # 지정된 타입이고 steps 정보가 있는 문제만 조회
+            all_questions = self.supabase.table('questions').select('*').eq('difficulty', difficulty).eq('type', question_type).execute()
             
             if all_questions.data:
                 # steps 정보가 있는 문제만 필터링

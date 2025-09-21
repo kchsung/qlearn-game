@@ -43,6 +43,38 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
     col1, col2 = st.columns([1, 2])
     
     with col1:
+        # 문제 유형 선택
+        db = GameDatabase()
+        available_types = db.get_available_question_types()
+        
+        # 문제 유형 한글 표시명 매핑
+        type_display_names = {
+            'multiple_choice': '객관식',
+            'short_answer': '단답형',
+            'essay': '서술형',
+            'coding': '코딩',
+            'scenario': '시나리오'
+        }
+        
+        # 사용 가능한 유형들을 한글로 표시
+        type_options = []
+        for q_type in available_types:
+            display_name = type_display_names.get(q_type, q_type)
+            type_options.append(f"{display_name} ({q_type})")
+        
+        selected_type_display = st.selectbox(
+            "문제 유형 선택",
+            type_options,
+            index=0  # 기본값은 첫 번째 옵션
+        )
+        
+        # 선택된 유형에서 실제 타입 추출
+        selected_type = available_types[0]  # 기본값
+        for i, option in enumerate(type_options):
+            if option == selected_type_display:
+                selected_type = available_types[i]
+                break
+        
         difficulty = st.selectbox(
             "난이도 선택",
             available_difficulties
@@ -53,7 +85,6 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
         with col_btn1:
             if st.button("🎲 문제 받기", type="primary", use_container_width=True):
                 # DB에서 문제 가져오기 (PASS한 문제 제외)
-                db = GameDatabase()
                 user_id = st.session_state.get('user_id')
                 
                 # 사용자가 PASS한 문제 ID 목록 조회
@@ -61,13 +92,14 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                 if user_id:
                     passed_question_ids = db.get_passed_question_ids(user_id)
                 
-                question = db.get_random_question(difficulty=difficulty, exclude_question_ids=passed_question_ids)
+                question = db.get_random_question(difficulty=difficulty, question_type=selected_type, exclude_question_ids=passed_question_ids)
                 
                 if question:
                     st.session_state.current_question = question
                     st.session_state.current_step = 0
                     st.session_state.user_answers = []
                     st.session_state.last_difficulty = difficulty  # 난이도 저장
+                    st.session_state.last_question_type = selected_type  # 문제 유형 저장
                     st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
                     st.session_state.answer_submitted = False  # 제출 상태 초기화
                     st.rerun()
@@ -77,7 +109,6 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
         with col_btn2:
             if st.button("🔄 다른 문제", use_container_width=True):
                 # 다른 문제 가져오기 (현재 문제와 PASS한 문제 제외)
-                db = GameDatabase()
                 user_id = st.session_state.get('user_id')
                 current_question_id = None
                 if 'current_question' in st.session_state:
@@ -95,13 +126,14 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                 
                 # 최대 5번 시도해서 다른 문제 찾기
                 for attempt in range(5):
-                    question = db.get_random_question(difficulty=difficulty, exclude_question_ids=exclude_ids)
+                    question = db.get_random_question(difficulty=difficulty, question_type=selected_type, exclude_question_ids=exclude_ids)
                     
                     if question and question.get('id') != current_question_id:
                         st.session_state.current_question = question
                         st.session_state.current_step = 0
                         st.session_state.user_answers = []
                         st.session_state.last_difficulty = difficulty  # 난이도 저장
+                        st.session_state.last_question_type = selected_type  # 문제 유형 저장
                         st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
                         st.session_state.answer_submitted = False  # 제출 상태 초기화
                         st.rerun()
@@ -112,6 +144,7 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                             st.session_state.current_step = 0
                             st.session_state.user_answers = []
                             st.session_state.last_difficulty = difficulty
+                            st.session_state.last_question_type = selected_type  # 문제 유형 저장
                             st.session_state.question_start_time = st.session_state.get('question_start_time', 0)
                             st.session_state.answer_submitted = False  # 제출 상태 초기화
                             st.rerun()
@@ -388,9 +421,9 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
             col1, col2, col3 = st.columns([1, 3, 1])
             with col2:
                 if st.button("🔄 다른 문제 받기", type="primary", use_container_width=True):
-                    # 현재 난이도 유지하면서 새 문제 받기 (PASS한 문제 제외)
+                    # 현재 난이도와 문제 유형 유지하면서 새 문제 받기 (PASS한 문제 제외)
                     difficulty = st.session_state.get('last_difficulty', '보통')
-                    db = GameDatabase()
+                    question_type = st.session_state.get('last_question_type', 'multiple_choice')
                     user_id = st.session_state.get('user_id')
                     current_question_id = None
                     if 'current_question' in st.session_state:
@@ -408,7 +441,7 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
                     
                     # 최대 5번 시도해서 다른 문제 찾기
                     for attempt in range(5):
-                        new_question = db.get_random_question(difficulty=difficulty, exclude_question_ids=exclude_ids)
+                        new_question = db.get_random_question(difficulty=difficulty, question_type=question_type, exclude_question_ids=exclude_ids)
                         
                         if new_question and new_question.get('id') != current_question_id:
                             st.session_state.current_question = new_question
