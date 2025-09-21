@@ -103,16 +103,23 @@ class GameDatabase:
     def add_experience(self, user_id: str, xp: int) -> bool:
         """경험치 추가"""
         try:
+            st.write(f"🔍 경험치 추가 시작: user_id={user_id}, xp={xp}")
+            
             # 현재 경험치 조회
             profile = self.get_user_profile(user_id)
             if not profile:
+                st.write(f"🔍 프로필을 찾을 수 없음: {user_id}")
                 return False
             
             current_xp = profile.get('experience_points', 0)
             new_xp = current_xp + xp
+            current_level = profile.get('level', 1)
+            
+            st.write(f"🔍 현재 XP: {current_xp}, 추가할 XP: {xp}, 새로운 XP: {new_xp}")
             
             # 레벨 계산
             new_level = self._calculate_level(new_xp)
+            st.write(f"🔍 현재 레벨: {current_level}, 새로운 레벨: {new_level}")
             
             # 업데이트
             updates = {
@@ -120,7 +127,10 @@ class GameDatabase:
                 'level': new_level
             }
             
-            return self.update_user_profile(user_id, updates)
+            st.write(f"🔍 업데이트할 데이터: {updates}")
+            result = self.update_user_profile(user_id, updates)
+            st.write(f"🔍 경험치 추가 결과: {result}")
+            return result
         except Exception as e:
             st.error(f"경험치 추가 오류: {str(e)}")
             return False
@@ -128,8 +138,11 @@ class GameDatabase:
     def record_answer(self, user_id: str, is_correct: bool) -> bool:
         """답변 기록"""
         try:
+            st.write(f"🔍 답변 기록 시작: user_id={user_id}, is_correct={is_correct}")
+            
             profile = self.get_user_profile(user_id)
             if not profile:
+                st.write(f"🔍 프로필을 찾을 수 없음: {user_id}")
                 return False
             
             # 현재 통계
@@ -137,6 +150,8 @@ class GameDatabase:
             correct_answers = profile.get('correct_answers', 0)
             current_streak = profile.get('current_streak', 0)
             best_streak = profile.get('best_streak', 0)
+            
+            st.write(f"🔍 현재 통계: total={total_questions-1}, correct={correct_answers}, streak={current_streak}, best={best_streak}")
             
             if is_correct:
                 correct_answers += 1
@@ -153,7 +168,10 @@ class GameDatabase:
                 'best_streak': best_streak
             }
             
-            return self.update_user_profile(user_id, updates)
+            st.write(f"🔍 업데이트할 데이터: {updates}")
+            result = self.update_user_profile(user_id, updates)
+            st.write(f"🔍 답변 기록 결과: {result}")
+            return result
         except Exception as e:
             st.error(f"답변 기록 오류: {str(e)}")
             return False

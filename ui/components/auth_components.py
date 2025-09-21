@@ -24,10 +24,18 @@ def render_google_login_only(on_google_login: Callable[[], None]):
             """)
             return
         
-        # Google 로그인 버튼
+        # Google 로그인 버튼 (iOS 호환성 개선)
         st.markdown("### 로그인")
         if st.button("🔐 Google로 로그인", key="google_login_btn", use_container_width=True, type="primary"):
             on_google_login()
+        
+        # iOS 호환성 안내
+        st.markdown("""
+        <div style="text-align: center; color: #666; font-size: 12px; margin-top: 8px;">
+            📱 iOS에서 문제가 있다면<br>
+            최상위 창에서 로그인해주세요
+        </div>
+        """, unsafe_allow_html=True)
         
         st.markdown("---")
         st.markdown("""

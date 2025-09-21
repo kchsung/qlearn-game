@@ -39,6 +39,19 @@ class GameEngine:
         
         return max(xp, 1)  # 최소 1 XP
     
+    def calculate_simple_xp_reward(self, is_correct: bool, difficulty: str) -> int:
+        """단순 정답/오답에 대한 경험치 계산"""
+        if not is_correct:
+            return 0  # 오답은 경험치 없음
+        
+        # 정답일 때 기본 경험치
+        base_xp = self.xp_rewards["correct_answer"]
+        
+        # 난이도 보너스
+        xp = int(base_xp * DIFFICULTY_MULTIPLIER.get(difficulty, 1.0))
+        
+        return max(xp, 1)  # 최소 1 XP
+    
     def award_experience(self, user_id: str, xp: int) -> bool:
         """경험치 지급"""
         return self.db.add_experience(user_id, xp)
@@ -309,13 +322,19 @@ class UserManager:
     def update_user_stats(self, user_id: str, is_correct: bool, xp_earned: int = 0) -> bool:
         """사용자 통계 업데이트"""
         try:
+            st.write(f"🔍 통계 업데이트 시작: user_id={user_id}, is_correct={is_correct}, xp_earned={xp_earned}")
+            
             # 답변 기록
             success = self.db.record_answer(user_id, is_correct)
+            st.write(f"🔍 답변 기록 결과: {success}")
             
             # 경험치 지급
             if xp_earned > 0:
-                success = success and self.db.add_experience(user_id, xp_earned)
+                xp_success = self.db.add_experience(user_id, xp_earned)
+                st.write(f"🔍 경험치 지급 결과: {xp_success}")
+                success = success and xp_success
             
+            st.write(f"🔍 통계 업데이트 최종 결과: {success}")
             return success
         except Exception as e:
             st.error(f"사용자 통계 업데이트 중 오류: {str(e)}")

@@ -400,22 +400,23 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
         # 2. 제출 상태 설정
         st.session_state.answer_submitted = True
         
-        # 3. 직접 데이터베이스에 저장 (on_submit_answer 호출하지 않음)
-        db = GameDatabase()
-        success = db.save_user_answer(
+        # 3. on_submit_answer 콜백 호출하여 통계 업데이트 포함
+        st.write(f"🔍 답안 제출 시작: user_id={user_id}, pass_fail={pass_fail}")
+        result = on_submit_answer(
             user_id=user_id,
-            question_id=question['id'],
-            user_answer="",  # answer는 비워둠
-            score=100 if pass_fail == 'PASS' else 0,  # PASS면 100점, FAIL이면 0점
-            time_taken=0,  # 시간 측정 없음
-            tokens_used=0,  # 토큰 사용 없음
+            question=question,
+            answer="",  # answer는 비워둠
             pass_fail=pass_fail
         )
+        st.write(f"🔍 답안 제출 결과: {result}")
         
-        if success:
+        if result and result.get('success', True):
             # 결과 표시
             if pass_fail == 'PASS':
+                xp_earned = result.get('xp_earned', 0)
                 st.success(f"🎉 통과! 모든 단계를 정확히 선택했습니다!")
+                if xp_earned > 0:
+                    st.info(f"✨ 경험치 +{xp_earned} 획득!")
             else:
                 st.warning(f"❌ 실패. 일부 단계에서 오답을 선택했습니다.")
             
@@ -425,6 +426,9 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
                 del st.session_state.current_step
             if 'user_answers' in st.session_state:
                 del st.session_state.user_answers
+            
+            # 사이드바 새로고침을 위해 페이지 리로드
+            st.rerun()
             
             # 다른 문제 받기 버튼 표시
             st.markdown("---")
@@ -472,7 +476,8 @@ def submit_answers(question: Dict, user_answers: list, on_submit_answer: Callabl
                                 # 결과 화면 관련 세션 정리
                                 st.rerun()
         else:
-            st.error(f"❌ 제출 실패: 데이터베이스 저장에 실패했습니다.")
+            error_message = result.get('message', '답안 제출에 실패했습니다.') if result else '답안 제출에 실패했습니다.'
+            st.error(f"❌ 제출 실패: {error_message}")
             
     except Exception as e:
         st.error(f"답안 제출 중 오류가 발생했습니다: {str(e)}")

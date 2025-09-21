@@ -25,27 +25,48 @@ class AIAssessmentGame:
     
     def submit_answer(self, user_id: str, question: Dict, answer: str, pass_fail: str = None) -> Dict:
         """답변 제출 및 처리 (Supabase 기반)"""
-        # 자동 채점
-        grade_result = self.grader.grade_answer(question, answer, question['difficulty'])
-        
-        # 경험치 계산
-        xp_earned = self.game_engine.calculate_xp_reward(
-            grade_result['total_score'],
-            grade_result['time_taken'],
-            grade_result['tokens_used'],
-            question['difficulty']
-        )
-        
-        # 사용자 답변 저장
-        success = self.db.save_user_answer(
-            user_id=user_id,
-            question_id=question['id'],
-            user_answer=answer,
-            score=grade_result['total_score'],
-            time_taken=grade_result['time_taken'],
-            tokens_used=grade_result['tokens_used'],
-            pass_fail=pass_fail
-        )
+        # pass_fail 파라미터가 있으면 단순 정답/오답 처리
+        if pass_fail is not None:
+            is_correct = (pass_fail == 'PASS')
+            st.write(f"🔍 단순 모드: pass_fail={pass_fail}, is_correct={is_correct}")
+            # 단순 정답/오답에 대한 경험치 계산
+            xp_earned = self.game_engine.calculate_simple_xp_reward(is_correct, question['difficulty'])
+            st.write(f"🔍 계산된 경험치: {xp_earned}")
+            
+            # 사용자 답변 저장 (단순 모드)
+            success = self.db.save_user_answer(
+                user_id=user_id,
+                question_id=question['id'],
+                user_answer=answer,
+                score=100 if is_correct else 0,
+                time_taken=0,
+                tokens_used=0,
+                pass_fail=pass_fail
+            )
+        else:
+            # AI 채점 모드
+            grade_result = self.grader.grade_answer(question, answer, question['difficulty'])
+            
+            # 경험치 계산
+            xp_earned = self.game_engine.calculate_xp_reward(
+                grade_result['total_score'],
+                grade_result['time_taken'],
+                grade_result['tokens_used'],
+                question['difficulty']
+            )
+            
+            # 사용자 답변 저장
+            success = self.db.save_user_answer(
+                user_id=user_id,
+                question_id=question['id'],
+                user_answer=answer,
+                score=grade_result['total_score'],
+                time_taken=grade_result['time_taken'],
+                tokens_used=grade_result['tokens_used'],
+                pass_fail=pass_fail
+            )
+            
+            is_correct = grade_result['passed']
         
         if not success:
             return {
@@ -54,7 +75,6 @@ class AIAssessmentGame:
             }
         
         # 사용자 통계 업데이트
-        is_correct = grade_result['passed']
         stats_success = self.user_manager.update_user_stats(user_id, is_correct, xp_earned)
         
         if not stats_success:

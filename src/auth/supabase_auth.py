@@ -71,30 +71,49 @@ class SupabaseAuth:
             st.error("❌ OAuth URL 생성 실패")
             return ""
 
-        # ✅ 자바스크립트 없이, 같은 탭으로 이동(target="_self")
+        # ✅ iOS 호환성을 위한 iframe 탈출 + 사용자 클릭 이벤트 기반 이동
         st.markdown(f"""
         <div style="text-align:center;margin:20px 0;">
-            <a href="{url}" target="_self"
-            style="
+            <h3>🔐 Google Login</h3>
+            <p style="margin:10px 0;color:#666;">Google로 로그인하려면 아래 버튼을 클릭하세요.</p>
+            <button id="google-login-btn" style="
                 display:inline-block;
+                background:#4285f4;
+                color:white;
                 padding:12px 24px;
                 border-radius:8px;
-                background:#4285f4;
-                color:#fff;
-                text-decoration:none;
-                font-weight:600;
+                font-weight:bold;
                 font-size:16px;
+                width:100%;
+                max-width:300px;
+                text-align:center;
+                border:none;
+                cursor:pointer;
                 box-shadow:0 2px 4px rgba(0,0,0,0.1);
                 transition:background-color 0.2s;
-            "
-            onmouseover="this.style.background='#3367d6'"
-            onmouseout="this.style.background='#4285f4'">
-            🔐 Google로 로그인
-            </a>
+            " onmouseover="this.style.background='#3367d6'" onmouseout="this.style.background='#4285f4'">
+                Google Login
+            </button>
             <div style="margin-top:12px;opacity:0.7;font-size:14px;color:#666;">
-                현재 탭에서 이동합니다
+                iOS 호환 모드: 최상위 창에서 이동
             </div>
         </div>
+        <script>
+            const authUrl = {url!r};
+            document.getElementById('google-login-btn').addEventListener('click', function() {{
+                try {{
+                    // iframe 안이라면 top으로 탈출해서 이동
+                    if (window.top !== window.self) {{
+                        window.top.location.href = authUrl;
+                    }} else {{
+                        window.location.href = authUrl;
+                    }}
+                }} catch (e) {{
+                    // 일부 sandbox 환경에선 top 접근이 막힐 수 있어 fallback
+                    window.location.href = authUrl;
+                }}
+            }});
+        </script>
         """, unsafe_allow_html=True)
 
         st.stop()
@@ -150,7 +169,8 @@ class SupabaseAuth:
                     }
                     
                     self.set_user_session(user_data)
-                    st.query_params.clear()
+                    # iOS 호환성: 세션 저장 후 URL 정리 (즉시 clear하지 않음)
+                    # st.query_params.clear()  # iOS에서 콜백 후 즉시 clear하면 세션 유실 가능
                     return user_data
                 else:
                     # 마지막 시도: authorization_code grant_type
@@ -169,7 +189,8 @@ class SupabaseAuth:
                         }
                         
                         self.set_user_session(user_data)
-                        st.query_params.clear()
+                        # iOS 호환성: 세션 저장 후 URL 정리 (즉시 clear하지 않음)
+                        # st.query_params.clear()  # iOS에서 콜백 후 즉시 clear하면 세션 유실 가능
                         return user_data
                     else:
                         return None
@@ -202,7 +223,8 @@ class SupabaseAuth:
         }
 
         self.set_user_session(user_data)
-        st.query_params.clear()
+        # iOS 호환성: 세션 저장 후 URL 정리 (즉시 clear하지 않음)
+        # st.query_params.clear()  # iOS에서 콜백 후 즉시 clear하면 세션 유실 가능
         st.success("✅ OAuth 인증 완료!")
         return user_data
 
