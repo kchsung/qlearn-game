@@ -26,8 +26,27 @@ def render_google_login_only(on_google_login: Callable[[], None]):
         
         # Google 로그인 버튼 (iOS 호환성 개선)
         st.markdown("### 로그인")
-        if st.button("🔐 Google로 로그인", key="google_login_btn", use_container_width=True, type="primary"):
-            on_google_login()
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🔐 Google로 로그인", key="google_login_btn", use_container_width=True, type="primary"):
+                on_google_login()
+        
+        with col2:
+            if st.button("🧪 테스트 로그인", key="test_login_btn", use_container_width=True, type="secondary"):
+                # 테스트 로그인 처리
+                test_user_data = {
+                    "user_id": "test_user_001",
+                    "email": "test@example.com",
+                    "name": "테스터",
+                    "avatar_url": "",
+                    "access_token": "test_token_001"
+                }
+                st.session_state.user = test_user_data
+                st.session_state.access_token = "test_token_001"
+                st.session_state.user_id = "test_user_001"
+                st.success("🧪 테스트 모드로 로그인되었습니다!")
+                st.rerun()
         
         # iOS 호환성 안내
         st.markdown("""

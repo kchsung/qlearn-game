@@ -192,6 +192,10 @@ class UserManager:
     def get_user_profile(self, user_id: str) -> Optional[Dict]:
         """사용자 프로필 조회 (UI용 필드 추가)"""
         try:
+            # 테스트 사용자인 경우 가상 프로필 반환
+            if user_id == "test_user_001":
+                return self._get_test_user_profile()
+            
             profile = self.db.get_user_profile(user_id)
             if not profile:
                 return None
@@ -216,6 +220,89 @@ class UserManager:
         except Exception as e:
             st.error(f"사용자 프로필 조회 중 오류: {str(e)}")
             return None
+    
+    def _get_test_user_profile(self) -> Dict:
+        """테스트 사용자용 가상 프로필 생성"""
+        # 세션에서 테스트 사용자 통계 가져오기
+        test_stats = st.session_state.get('test_user_stats', {
+            'total_questions_solved': 0,
+            'correct_answers': 0,
+            'current_streak': 0,
+            'best_streak': 0,
+            'experience_points': 0,
+            'level': 1
+        })
+        
+        # 정답률 계산
+        accuracy = 0.0
+        if test_stats['total_questions_solved'] > 0:
+            accuracy = (test_stats['correct_answers'] / test_stats['total_questions_solved']) * 100
+        
+        # 다음 레벨 XP 계산
+        next_level_xp = test_stats['level'] * 100
+        
+        return {
+            'user_id': 'test_user_001',
+            'username': '테스터',
+            'email': 'test@example.com',
+            'level': test_stats['level'],
+            'experience_points': test_stats['experience_points'],
+            'total_questions_solved': test_stats['total_questions_solved'],
+            'correct_answers': test_stats['correct_answers'],
+            'current_streak': test_stats['current_streak'],
+            'best_streak': test_stats['best_streak'],
+            'level_icon': '🧪',
+            'level_name': '테스터',
+            'xp': test_stats['experience_points'],
+            'next_level_xp': next_level_xp,
+            'accuracy': accuracy,
+            'achievements': [
+                {
+                    'id': 'test_achievement',
+                    'name': '테스트 모드',
+                    'description': '테스트 모드로 게임을 체험해보세요!',
+                    'icon': '🧪'
+                }
+            ]
+        }
+    
+    def _update_test_user_stats(self, is_correct: bool, xp_earned: int = 0) -> bool:
+        """테스트 사용자 통계 업데이트 (세션에서만 관리)"""
+        try:
+            # 세션에서 테스트 사용자 통계 가져오기
+            test_stats = st.session_state.get('test_user_stats', {
+                'total_questions_solved': 0,
+                'correct_answers': 0,
+                'current_streak': 0,
+                'best_streak': 0,
+                'experience_points': 0,
+                'level': 1
+            })
+            
+            # 통계 업데이트
+            test_stats['total_questions_solved'] += 1
+            if is_correct:
+                test_stats['correct_answers'] += 1
+                test_stats['current_streak'] += 1
+                test_stats['best_streak'] = max(test_stats['best_streak'], test_stats['current_streak'])
+            else:
+                test_stats['current_streak'] = 0
+            
+            # 경험치 추가
+            if xp_earned > 0:
+                test_stats['experience_points'] += xp_earned
+                # 레벨 업 계산 (간단한 로직)
+                new_level = (test_stats['experience_points'] // 100) + 1
+                test_stats['level'] = new_level
+            
+            # 세션에 저장
+            st.session_state['test_user_stats'] = test_stats
+            
+            st.write(f"🔍 테스트 사용자 통계 업데이트: {test_stats}")
+            return True
+        except Exception as e:
+            st.error(f"테스트 사용자 통계 업데이트 중 오류: {str(e)}")
+            return False
     
     def _get_level_info(self, level: int) -> Dict:
         """레벨 정보 조회 (DB에서)"""
@@ -323,6 +410,10 @@ class UserManager:
         """사용자 통계 업데이트"""
         try:
             st.write(f"🔍 통계 업데이트 시작: user_id={user_id}, is_correct={is_correct}, xp_earned={xp_earned}")
+            
+            # 테스트 사용자인 경우 세션에서만 관리
+            if user_id == "test_user_001":
+                return self._update_test_user_stats(is_correct, xp_earned)
             
             # 답변 기록
             success = self.db.record_answer(user_id, is_correct)

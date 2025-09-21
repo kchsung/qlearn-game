@@ -33,16 +33,21 @@ class AIAssessmentGame:
             xp_earned = self.game_engine.calculate_simple_xp_reward(is_correct, question['difficulty'])
             st.write(f"🔍 계산된 경험치: {xp_earned}")
             
-            # 사용자 답변 저장 (단순 모드)
-            success = self.db.save_user_answer(
-                user_id=user_id,
-                question_id=question['id'],
-                user_answer=answer,
-                score=100 if is_correct else 0,
-                time_taken=0,
-                tokens_used=0,
-                pass_fail=pass_fail
-            )
+            # 테스트 사용자는 DB에 저장하지 않음
+            if user_id == "test_user_001":
+                success = True  # 테스트 사용자는 항상 성공으로 처리
+                st.write("🔍 테스트 사용자: DB 저장 건너뜀")
+            else:
+                # 사용자 답변 저장 (단순 모드)
+                success = self.db.save_user_answer(
+                    user_id=user_id,
+                    question_id=question['id'],
+                    user_answer=answer,
+                    score=100 if is_correct else 0,
+                    time_taken=0,
+                    tokens_used=0,
+                    pass_fail=pass_fail
+                )
         else:
             # AI 채점 모드
             grade_result = self.grader.grade_answer(question, answer, question['difficulty'])
@@ -55,16 +60,21 @@ class AIAssessmentGame:
                 question['difficulty']
             )
             
-            # 사용자 답변 저장
-            success = self.db.save_user_answer(
-                user_id=user_id,
-                question_id=question['id'],
-                user_answer=answer,
-                score=grade_result['total_score'],
-                time_taken=grade_result['time_taken'],
-                tokens_used=grade_result['tokens_used'],
-                pass_fail=pass_fail
-            )
+            # 테스트 사용자는 DB에 저장하지 않음
+            if user_id == "test_user_001":
+                success = True  # 테스트 사용자는 항상 성공으로 처리
+                st.write("🔍 테스트 사용자: DB 저장 건너뜀")
+            else:
+                # 사용자 답변 저장
+                success = self.db.save_user_answer(
+                    user_id=user_id,
+                    question_id=question['id'],
+                    user_answer=answer,
+                    score=grade_result['total_score'],
+                    time_taken=grade_result['time_taken'],
+                    tokens_used=grade_result['tokens_used'],
+                    pass_fail=pass_fail
+                )
             
             is_correct = grade_result['passed']
         
