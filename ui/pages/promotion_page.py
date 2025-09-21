@@ -17,7 +17,7 @@ def render_promotion_exam(profile: Dict, game_engine, db, user_id: str):
     # 승급 자격 확인
     can_promote, promotion_info = game_engine.check_promotion_eligibility(user_id)
     
-    if can_promote:
+    if can_promote and promotion_info and 'next_level' in promotion_info:
         st.success(f"🎯 레벨 {promotion_info['next_level']} 승급 시험에 도전할 수 있습니다!")
         st.info(f"📊 현재 상태: 레벨 {promotion_info['current_level']}, XP {promotion_info['current_xp']}/{promotion_info['required_xp']}")
         
@@ -46,10 +46,20 @@ def render_promotion_exam(profile: Dict, game_engine, db, user_id: str):
                     st.warning("❌ '쉬움' 난이도의 모든 문제를 이미 통과했습니다! 다른 난이도의 문제를 풀어보세요.")
                 else:
                     st.error("❌ 승급 시험 문제를 찾을 수 없습니다.")
+    elif can_promote:
+        # can_promote가 True이지만 promotion_info가 비어있거나 필요한 키가 없는 경우
+        st.warning("❌ 승급 시험 정보를 불러올 수 없습니다.")
+        st.info("📊 페이지를 새로고침해주세요.")
+        return
     else:
-        st.warning(f"❌ 레벨 {promotion_info['next_level']} 승급 시험 자격이 없습니다.")
-        st.info(f"📊 현재 상태: 레벨 {promotion_info['current_level']}, XP {promotion_info['current_xp']}/{promotion_info['required_xp']}")
-        st.info(f"💡 승급을 위해서는 {promotion_info['required_xp'] - promotion_info['current_xp']} XP가 더 필요합니다.")
+        # promotion_info가 비어있을 수 있으므로 안전하게 처리
+        if promotion_info and 'next_level' in promotion_info:
+            st.warning(f"❌ 레벨 {promotion_info['next_level']} 승급 시험 자격이 없습니다.")
+            st.info(f"📊 현재 상태: 레벨 {promotion_info['current_level']}, XP {promotion_info['current_xp']}/{promotion_info['required_xp']}")
+            st.info(f"💡 승급을 위해서는 {promotion_info['required_xp'] - promotion_info['current_xp']} XP가 더 필요합니다.")
+        else:
+            st.warning("❌ 승급 시험 자격을 확인할 수 없습니다.")
+            st.info("📊 사용자 프로필을 확인해주세요.")
         return
     
     # 승급 시험 진행 중
