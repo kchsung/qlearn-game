@@ -207,6 +207,7 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                         # 딕셔너리 형태의 선택지 처리
                         option_texts = []
                         option_feedbacks = {}
+                        option_id_mapping = {}  # 텍스트 -> ID 매핑
                         
                         for i, option in enumerate(options):
                             if isinstance(option, dict):
@@ -214,16 +215,10 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                                 option_text = option.get('text', f'선택지 {i+1}')
                                 option_feedback = option.get('feedback', '')
                                 
-                                # 텍스트에서 이미 "A. " 형태로 시작하는지 확인
-                                if option_text.startswith(f"{option_id}. "):
-                                    # 이미 "A. " 형태면 그대로 사용
-                                    clean_text = option_text
-                                else:
-                                    # "A. " 형태가 아니면 텍스트만 사용
-                                    clean_text = option_text
-                                
-                                option_texts.append(clean_text)
-                                option_feedbacks[clean_text] = option_feedback
+                                # 원본 텍스트 그대로 사용
+                                option_texts.append(option_text)
+                                option_feedbacks[option_text] = option_feedback
+                                option_id_mapping[option_text] = option_id  # 텍스트 -> ID 매핑 저장
                             else:
                                 option_texts.append(str(option))
                         
@@ -232,6 +227,10 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                             option_texts,
                             key=f"step_{current_step}"
                         )
+                        
+                        # 선택된 옵션의 ID를 세션에 저장
+                        if selected_option in option_id_mapping:
+                            st.session_state[f"selected_id_{current_step}"] = option_id_mapping[selected_option]
                         
                         # 피드백 보기 버튼
                         if st.button("💡 피드백 보기", key=f"feedback_{current_step}", use_container_width=True):
@@ -261,19 +260,25 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                 with col_next:
                     if current_step < len(steps) - 1:
                         if st.button("다음 ➡️", type="primary", use_container_width=True):
-                            # 현재 답안 저장
+                            # 현재 답안 저장 (ID만 저장)
                             if 'user_answers' not in st.session_state:
                                 st.session_state.user_answers = []
-                            st.session_state.user_answers.append(selected_option)
+                            
+                            # 선택된 옵션의 ID 가져오기
+                            selected_id = st.session_state.get(f"selected_id_{current_step}")
+                            st.session_state.user_answers.append(selected_id)
                             st.session_state.current_step += 1
                             st.rerun()
                     else:
                         # 마지막 단계 - 제출 버튼
                         if st.button("📤 제출", type="primary", use_container_width=True):
-                            # 모든 답안 저장
+                            # 모든 답안 저장 (ID만 저장)
                             if 'user_answers' not in st.session_state:
                                 st.session_state.user_answers = []
-                            st.session_state.user_answers.append(selected_option)
+                            
+                            # 선택된 옵션의 ID 가져오기
+                            selected_id = st.session_state.get(f"selected_id_{current_step}")
+                            st.session_state.user_answers.append(selected_id)
                             
                             # 답안 제출
                             user_id = st.session_state.get('user_id')
@@ -329,7 +334,7 @@ def show_feedback_for_step(step: Dict, selected_option: str):
 
 
 def compare_answers(question: Dict, user_answers: list) -> str:
-    """답안 비교를 통한 PASS/FAIL 판정"""
+    """답안 비교를 통한 PASS/FAIL 판정 - ABCD 문자만 비교"""
     try:
         # steps에서 정답 추출
         steps = question.get('steps', [])
@@ -364,12 +369,17 @@ def compare_answers(question: Dict, user_answers: list) -> str:
             if not correct_option_id:
                 return 'FAIL'
             
-            # 사용자 답안 확인
+            # 정답이 A, B, C, D 중 하나인지 검증
+            if correct_option_id not in ['A', 'B', 'C', 'D']:
+                return 'FAIL'
+            
+            # 사용자 답안 확인 - ID만 저장된 구조
             user_answer = user_answers[i]
-            if isinstance(user_answer, dict):
-                selected_id = user_answer.get('selected_option_id')
-            else:
-                selected_id = str(user_answer)[0] if user_answer else None
+            selected_id = user_answer  # 이제 ID만 저장되므로 직접 사용
+            
+            # 사용자 답안이 A, B, C, D 중 하나인지 검증
+            if selected_id not in ['A', 'B', 'C', 'D']:
+                return 'FAIL'
             
             # 정답과 비교
             if selected_id != correct_option_id:
