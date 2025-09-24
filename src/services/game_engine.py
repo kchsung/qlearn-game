@@ -58,11 +58,9 @@ class GameEngine:
     
     def check_promotion_eligibility(self, user_id: str) -> Tuple[bool, Dict]:
         """승급 시험 자격 확인"""
-        # 테스트 사용자인 경우 가상 프로필 사용
-        if user_id == "test_user_001":
-            profile = self._get_test_user_profile()
-        else:
-            profile = self.db.get_user_profile(user_id)
+        # UserManager를 통해 프로필 조회 (테스트 사용자 지원 포함)
+        user_manager = UserManager(self.db)
+        profile = user_manager.get_user_profile(user_id)
         
         if not profile:
             return False, {}

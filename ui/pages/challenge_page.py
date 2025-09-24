@@ -271,7 +271,9 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                             st.rerun()
                     else:
                         # 마지막 단계 - 제출 버튼
-                        if st.button("📤 제출", type="primary", use_container_width=True):
+                        # 이미 제출된 경우 버튼 비활성화
+                        is_submitted = st.session_state.get('answer_submitted', False)
+                        if st.button("📤 제출", type="primary", use_container_width=True, disabled=is_submitted):
                             # 모든 답안 저장 (ID만 저장)
                             if 'user_answers' not in st.session_state:
                                 st.session_state.user_answers = []
@@ -286,6 +288,8 @@ def render_challenge_tab(profile: Dict, on_submit_answer: Callable):
                                 submit_answers(question, st.session_state.user_answers, on_submit_answer, user_id)
                             else:
                                 st.error("사용자 ID를 찾을 수 없습니다.")
+                        elif is_submitted:
+                            st.info("✅ 답안이 이미 제출되었습니다.")
             
             else:
                 st.success("모든 단계를 완료했습니다!")

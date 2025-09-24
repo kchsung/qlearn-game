@@ -51,6 +51,7 @@ class AIAssessmentGame:
         else:
             # AI 채점 모드
             grade_result = self.grader.grade_answer(question, answer, question['difficulty'])
+            is_correct = grade_result['passed']
             
             # 경험치 계산
             xp_earned = self.game_engine.calculate_xp_reward(
@@ -75,8 +76,6 @@ class AIAssessmentGame:
                     tokens_used=grade_result['tokens_used'],
                     pass_fail=pass_fail
                 )
-            
-            is_correct = grade_result['passed']
         
         if not success:
             return {
@@ -106,14 +105,14 @@ class AIAssessmentGame:
             level_up = True
         
         return {
-            "passed": grade_result['passed'],
-            "score": grade_result['total_score'],
+            "passed": is_correct,
+            "score": 100 if is_correct else 0,
             "xp_earned": xp_earned,
-            "feedback": grade_result['feedback'],
+            "feedback": "정답입니다!" if is_correct else "오답입니다.",
             "level_up": level_up,
             "new_level": new_level,
-            "time_taken": grade_result['time_taken'],
-            "tokens_used": grade_result['tokens_used']
+            "time_taken": 0,  # pass_fail 모드에서는 시간 측정 안함
+            "tokens_used": 0  # pass_fail 모드에서는 토큰 사용 안함
         }
     
     def handle_google_login(self):
